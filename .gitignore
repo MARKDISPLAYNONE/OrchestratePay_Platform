@@ -1,0 +1,39 @@
+# ─── Node / Backend ──────────────────────────────────────────────────────────
+node_modules/
+dist/
+.env
+*.env.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage/
+.nyc_output/
+
+# ─── Android ─────────────────────────────────────────────────────────────────
+.gradle/
+Tap2Pay/android/app/build/
+Tap2Pay/android/build/
+*.apk
+*.aab
+*.dex
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+*.keystore
+!debug.keystore
+
+# ─── Docker ──────────────────────────────────────────────────────────────────
+.docker/
+
+# ─── OS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+logs/

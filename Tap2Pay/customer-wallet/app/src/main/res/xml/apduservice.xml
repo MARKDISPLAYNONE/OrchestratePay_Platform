@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    apduservice.xml — AID registration for WalletHceService.
+
+    Android uses this file to route incoming APDU traffic to the correct
+    HostApduService. When the POS terminal sends SELECT AID F04F52434845535441,
+    Android wakes WalletHceService and hands it the APDU.
+
+    AID: F0 4F 52 43 48 45 53 54 41  (9 bytes)
+      F0 = proprietary range (no EMVCo registration needed)
+      4F 52 43 48 45 53 54 41 = ASCII "ORCHESTAT"
+
+    CATEGORY_OTHER: this is NOT a payment AID in the NFC Forum / EMV sense.
+    Using CATEGORY_PAYMENT would require Google Tap & Pay approval. We use
+    CATEGORY_OTHER because this is a proprietary peer-to-peer protocol where
+    the "POS" is our own Sunmi terminal — not a public payment terminal.
+
+    requireDeviceUnlock: true — ensures HCE is only active when the device
+    is unlocked. This prevents a pickpocket silently draining a locked phone.
+-->
+<host-apdu-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/hce_service_description"
+    android:requireDeviceUnlock="true">
+
+    <aid-group
+        android:description="@string/hce_aid_description"
+        android:category="other">
+
+        <aid-filter android:name="F04F52434845535441" />
+
+    </aid-group>
+
+</host-apdu-service>

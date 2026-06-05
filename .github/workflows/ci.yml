@@ -1,0 +1,215 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── Backend: type-check + test ─────────────────────────────────────────────
+  backend:
+    name: Backend — type-check & tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: orchestratepay_test
+          POSTGRES_USER: orchestrate
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orchestrate"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: Tap2Pay/backend
+
+    env:
+      DATABASE_URL: postgresql://orchestrate:testpassword@localhost:5432/orchestratepay_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-test-jwt-secret-not-for-production
+      DARAJA_CONSUMER_KEY: test-key
+      DARAJA_CONSUMER_SECRET: test-secret
+      DARAJA_SHORTCODE: "174379"
+      DARAJA_PASSKEY: bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919
+      DARAJA_CALLBACK_BASE_URL: http://localhost:3000
+      NODE_ENV: test
+      LOG_LEVEL: error
+      ADMIN_SECRET: ci-admin-secret-not-for-production
+      NFC_SIGNING_SECRET: ci-nfc-signing-secret-not-for-production
+      SMS_ENABLED: "false"
+      PLAY_INTEGRITY_REQUIRED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Tap2Pay/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run migrations (test DB)
+        run: npm run migrate
+
+      - name: Run unit tests with coverage
+        run: npm test -- --coverage --ci --passWithNoTests
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: Tap2Pay/backend/coverage/
+
+  # ── Load test (smoke) — runs on main branch only ──────────────────────────
+  load-test:
+    name: Load test — smoke (2 VUs × 30 s)
+    runs-on: ubuntu-latest
+    needs: backend          # only run after tests pass
+    if: github.ref == 'refs/heads/main'
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: orchestratepay_test
+          POSTGRES_USER: orchestrate
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orchestrate"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: Tap2Pay/backend
+
+    env:
+      DATABASE_URL: postgresql://orchestrate:testpassword@localhost:5432/orchestratepay_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-test-jwt-secret-not-for-production
+      DARAJA_CONSUMER_KEY: test-key
+      DARAJA_CONSUMER_SECRET: test-secret
+      DARAJA_SHORTCODE: "174379"
+      DARAJA_PASSKEY: bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919
+      DARAJA_CALLBACK_BASE_URL: http://localhost:3000
+      NODE_ENV: test
+      LOG_LEVEL: error
+      ADMIN_SECRET: ci-admin-secret-not-for-production
+      NFC_SIGNING_SECRET: ci-nfc-signing-secret-not-for-production
+      SMS_ENABLED: "false"
+      PLAY_INTEGRITY_REQUIRED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Tap2Pay/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run migrations
+        run: npm run migrate
+
+      - name: Start backend server
+        run: node -r ts-node/register src/index.ts &
+        env:
+          PORT: 3000
+
+      - name: Wait for server to be ready
+        run: npx wait-on http://localhost:3000/health --timeout 30000
+
+      - name: Install k6
+        run: |
+          curl -fsSL https://pkg.grafana.com/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/grafana.gpg
+          echo "deb [signed-by=/usr/share/keyrings/grafana.gpg] https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
+          sudo apt-get update && sudo apt-get install -y k6
+
+      - name: Run smoke load test
+        run: k6 run --env SCENARIO=smoke --env BASE_URL=http://localhost:3000 load-test.js
+
+      - name: Upload load test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: Tap2Pay/backend/load-test-results.json
+
+  # ── Android: unit tests + debug build ─────────────────────────────────────
+  android:
+    name: Android — unit tests & debug build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: Tap2Pay/android
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: wrapper
+
+      - name: Run unit tests
+        run: ./gradlew test --no-daemon --stacktrace
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: Tap2Pay/android/app/build/outputs/apk/debug/app-debug.apk

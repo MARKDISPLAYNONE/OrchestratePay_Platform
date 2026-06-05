@@ -1,0 +1,474 @@
+openapi: 3.0.3
+info:
+  title: OrchestratePay Backend API
+  version: 1.0.0
+  description: |
+    NFC tap-to-pay backend for Kenyan merchants.
+    Merchants authenticate with JWT. The Android app polls for payment status.
+    M-Pesa callbacks arrive asynchronously from Safaricom's servers.
+  contact:
+    name: OrchestratePay
+    url: https://orchestratepay.co.ke
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development
+  - url: https://api.orchestratepay.co.ke/api/v1
+    description: Production
+
+# ─── Security ────────────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 8-hour JWT issued at login. Stored in Android EncryptedSharedPreferences.
+
+  schemas:
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: Merchant not found or inactive
+        details:
+          type: string
+          description: Only present on 400 validation errors
+
+    LoginRequest:
+      type: object
+      required: [email, password, deviceId]
+      properties:
+        email:
+          type: string
+          format: email
+          example: merchant@example.co.ke
+        password:
+          type: string
+          minLength: 8
+          example: S3cur3P@ss!
+        deviceId:
+          type: string
+          description: Android device identifier for single-device session enforcement
+          example: android-imei-867123456789012
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT bearer token, valid for 8 hours
+        merchantId:
+          type: string
+          format: uuid
+        merchantName:
+          type: string
+          example: Mama Ngina's Chemist
+        expiresAt:
+          type: integer
+          description: Unix timestamp (ms) when the token expires
+
+    TransactionRequest:
+      type: object
+      required: [merchantId, amountCents, source, idempotencyKey, timestamp]
+      properties:
+        merchantId:
+          type: string
+          format: uuid
+        amountCents:
+          type: integer
+          minimum: 100
+          maximum: 1000000000
+          description: Amount in Kenya Shilling cents (KES × 100)
+          example: 5000
+        source:
+          type: string
+          enum: [NFC_TAG, QR_CODE, ISO_CARD]
+        tagId:
+          type: string
+          description: OrchestratePay tag UUID (required for NFC_TAG source)
+          example: tag-uuid-abc123
+        nfcUid:
+          type: string
+          description: Raw 7-byte NFC UID (hex, for audit log only)
+          example: 04ab12cd34ef01
+        idempotencyKey:
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+          description: SHA-256(merchantId:tagId:amountCents:roundToMinute(ts))[0..16] hex
+        timestamp:
+          type: integer
+          description: Unix timestamp (ms) when the tap occurred on the device
+
+    TransactionPendingResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [PENDING]
+        txnId:
+          type: string
+          format: uuid
+        message:
+          type: string
+          example: Payment request sent — waiting for customer approval
+
+    TransactionStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [PENDING, CONFIRMED, DECLINED, FAILED, EXPIRED]
+        txnId:
+          type: string
+          format: uuid
+        mpesaRef:
+          type: string
+          description: M-Pesa receipt number (only on CONFIRMED)
+          example: NLJ7RT61SV
+        amountCents:
+          type: integer
+        merchantName:
+          type: string
+        consumerPhone:
+          type: string
+          description: Masked phone number (e.g. 25471****78)
+        reason:
+          type: string
+          description: Human-friendly failure reason (only on non-CONFIRMED)
+
+    TransactionListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, CONFIRMED, DECLINED, FAILED, EXPIRED]
+        amount_cents:
+          type: integer
+        mpesa_receipt:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    MerchantProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+# ─── Paths ───────────────────────────────────────────────────────────────────
+paths:
+
+  /health:
+    get:
+      summary: Health check
+      description: Used by load balancers and Docker HEALTHCHECK
+      tags: [System]
+      responses:
+        '200':
+          description: Server is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                    example: 1.0.0
+
+  /auth/login:
+    post:
+      summary: Merchant login
+      description: |
+        Issues an 8-hour JWT. Calling this from a new device invalidates the
+        previous session on the old device (single-device enforcement).
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Account deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      summary: Merchant logout
+      description: Clears device binding, invalidating the current session.
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /transactions:
+    post:
+      summary: Create a payment transaction
+      description: |
+        Creates a transaction and fires an M-Pesa STK Push to the consumer's phone.
+        Returns immediately with `status: PENDING`. The Android app then polls
+        `/transactions/:id/status` every 2.5 seconds until the status changes.
+
+        **Idempotency**: include the `idempotencyKey` header. If the same key is seen
+        again within 60 seconds, the cached result is returned without a duplicate STK Push.
+      tags: [Transactions]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionRequest'
+      responses:
+        '201':
+          description: STK Push sent, waiting for consumer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionPendingResponse'
+        '200':
+          description: Idempotency hit — returning cached result (no duplicate STK Push)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionPendingResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Merchant ID in body does not match JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Merchant not found or NFC tag not registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Daraja STK Push failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      summary: List recent transactions
+      description: Returns the authenticated merchant's transaction history, most recent first.
+      tags: [Transactions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Transaction list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TransactionListItem'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+  /transactions/{id}/status:
+    get:
+      summary: Poll transaction status
+      description: |
+        Polled by the Android app every 2.5 seconds after firing an STK Push.
+        Resolves via Redis cache first (fast path) then falls back to Postgres.
+        The app stops polling when status is no longer PENDING.
+      tags: [Transactions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Current transaction status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionStatusResponse'
+        '404':
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /merchants/me:
+    get:
+      summary: Get authenticated merchant profile
+      tags: [Merchants]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Merchant profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantProfile'
+        '404':
+          description: Merchant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /mpesa-callback:
+    post:
+      summary: M-Pesa STK Push callback (Safaricom → server)
+      description: |
+        **Called by Safaricom's servers, not by the Android app.**
+
+        This endpoint MUST respond with HTTP 200 immediately and process the
+        callback asynchronously (Golden Rule 1). No auth header is required
+        because Safaricom doesn't support shared secrets on callbacks — instead,
+        restrict this endpoint to Safaricom's IP ranges in your firewall.
+      tags: [Callbacks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Safaricom STK Push callback body
+              example:
+                Body:
+                  stkCallback:
+                    MerchantRequestID: 26335-1620083-1
+                    CheckoutRequestID: ws_CO_25052024123456789
+                    ResultCode: 0
+                    ResultDesc: The service request is processed successfully.
+                    CallbackMetadata:
+                      Item:
+                        - Name: Amount
+                          Value: 50
+                        - Name: MpesaReceiptNumber
+                          Value: NLJ7RT61SV
+                        - Name: PhoneNumber
+                          Value: 254712345678
+      responses:
+        '200':
+          description: Accepted — Safaricom requires this immediately
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ResultCode:
+                    type: integer
+                    example: 0
+                  ResultDesc:
+                    type: string
+                    example: Accepted
+
+tags:
+  - name: Auth
+    description: Merchant login and session management
+  - name: Transactions
+    description: Payment initiation and status polling
+  - name: Merchants
+    description: Merchant profile
+  - name: Callbacks
+    description: Inbound webhooks from Safaricom (not called by the Android app)
+  - name: System
+    description: Health and diagnostics

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Declares ConsumerHceService as the handler for OrchestratePay's proprietary AID.
+  AID F04F52434845535441 is in the 0xF0–0xFF proprietary range — no EMVCo registration needed.
+  Same AID as the merchant app's OrchestrateHceService — the Sunmi terminal and SoftPOS
+  already know this AID and will automatically discover this consumer wallet app.
+-->
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/hce_service_desc"
+    android:requireDeviceUnlock="false">
+    <aid-group
+        android:description="@string/hce_aid_desc"
+        android:category="other">
+        <aid-filter android:name="F04F52434845535441" />
+    </aid-group>
+</host-apdu-service>

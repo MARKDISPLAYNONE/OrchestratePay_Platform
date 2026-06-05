@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Production: only HTTPS/WSS to our API domain -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">orchestratepay.co.ke</domain>
+    </domain-config>
+    <!-- Debug: allow cleartext to the emulator host (10.0.2.2 = localhost on host machine) -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+        <domain-config cleartextTrafficPermitted="true">
+            <domain includeSubdomains="true">10.0.2.2</domain>
+            <domain includeSubdomains="true">localhost</domain>
+        </domain-config>
+    </debug-overrides>
+</network-security-config>

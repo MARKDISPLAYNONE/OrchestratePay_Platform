@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  tech_list.xml — NFC technologies this app can handle.
+  Referenced by the TECH_DISCOVERED intent filter in AndroidManifest.xml.
+  Each <tech-list> is a set of technologies a tag must support to match.
+  Multiple <tech-list> groups = OR (match any group).
+-->
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <tech-list>
+        <!-- ISO 14443-4 Type A (Visa payWave, Mastercard PayPass, MIFARE DESFire) -->
+        <tech>android.nfc.tech.IsoDep</tech>
+    </tech-list>
+    <tech-list>
+        <!-- NDEF-formatted tags (NTAG215, MIFARE Ultralight) -->
+        <tech>android.nfc.tech.Ndef</tech>
+    </tech-list>
+    <tech-list>
+        <!-- Blank NDEF-capable tags (for tag programming at merchant onboarding) -->
+        <tech>android.nfc.tech.NdefFormatable</tech>
+    </tech-list>
+</resources>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OrchestratePay</string>
+    <string name="hce_service_desc">OrchestratePay Consumer Wallet — tap to pay</string>
+    <string name="hce_aid_desc">OrchestratePay payment credential</string>
+
+    <!-- Nav labels -->
+    <string name="nav_home">Home</string>
+    <string name="nav_pay">Pay</string>
+    <string name="nav_history">History</string>
+    <string name="nav_loyalty">Loyalty</string>
+    <string name="nav_profile">Profile</string>
+
+    <!-- Auth -->
+    <string name="sign_in">Sign in</string>
+    <string name="register">Create account</string>
+    <string name="email_hint">Email address</string>
+    <string name="password_hint">Password (min 8 characters)</string>
+    <string name="phone_hint">M-Pesa phone (254XXXXXXXXX)</string>
+
+    <!-- Pay screen -->
+    <string name="tab_nfc">Tap</string>
+    <string name="tab_qr">QR Code</string>
+    <string name="nfc_ready">Ready — hold phone near terminal</string>
+    <string name="nfc_disabled">NFC is off — tap to enable in Settings</string>
+    <string name="qr_refreshing">Refreshing QR…</string>
+    <string name="qr_expires_in">Expires in %1$ds</string>
+
+    <!-- General -->
+    <string name="loading">Loading…</string>
+    <string name="retry">Retry</string>
+    <string name="logout">Log out</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="kes_format">KSh %1$s</string>
+    <string name="payment_confirmed">Payment confirmed</string>
+    <string name="mpesa_ref">M-Pesa ref: %1$s</string>
+</resources>

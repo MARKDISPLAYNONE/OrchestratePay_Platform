@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OrchestratePay</string>
+    <string name="hce_service_description">OrchestratePay NFC Payment</string>
+    <string name="hce_aid_description">OrchestratePay Consumer Wallet</string>
+    <string name="ready_to_tap">Ready — enter amount then ask customer to tap</string>
+    <string name="waiting_for_customer">Waiting for customer to approve on M-Pesa…</string>
+    <string name="payment_confirmed">Payment Confirmed</string>
+    <string name="tap_again">Tap again</string>
+    <string name="retry">Retry</string>
+    <string name="done">Done</string>
+</resources>

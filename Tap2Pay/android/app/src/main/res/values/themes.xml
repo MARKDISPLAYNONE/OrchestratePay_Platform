@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- OrchestratePay green (inspired by M-Pesa branding) -->
+    <style name="Theme.OrchestratePay" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <item name="colorPrimary">#1D9E75</item>
+        <item name="colorPrimaryVariant">#0F6E56</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#534AB7</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="android:statusBarColor">#0F6E56</item>
+    </style>
+</resources>

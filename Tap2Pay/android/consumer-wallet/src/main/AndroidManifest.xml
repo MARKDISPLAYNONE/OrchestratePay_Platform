@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- HCE is optional — app still works without NFC hardware (QR payment path) -->
+    <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
+
+    <application
+        android:name=".ConsumerApp"
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.ConsumerWallet"
+        android:networkSecurityConfig="@xml/network_security_config">
+
+        <activity
+            android:name=".ui.LoginActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".ui.RegisterActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity android:name=".ui.HomeActivity" android:exported="false"
+            android:launchMode="singleTop" />
+
+        <!--
+            NfcTagPaymentActivity — handles taps on merchant display tags
+            (https://orchestratepay.co.ke/pay/{merchantId}).
+
+            Two entry points:
+              1. NDEF_DISCOVERED with https scheme + host + path prefix — OS chooses
+                 this activity when a consumer taps a display tag and the wallet is
+                 installed. singleTask ensures only one instance is ever on the back stack.
+              2. App Link (ACTION_VIEW) — same URL opened from browser or another app;
+                 android:autoVerify triggers domain ownership verification so the OS
+                 offers this app instead of asking the user to choose a browser.
+        -->
+        <activity
+            android:name=".ui.NfcTagPaymentActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+
+            <!-- NFC tag tap: NDEF URI record with orchestratepay.co.ke/pay/ prefix -->
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="https"
+                      android:host="orchestratepay.co.ke"
+                      android:pathPrefix="/pay/" />
+            </intent-filter>
+
+            <!-- App Link / browser deep-link — same URL -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                      android:host="orchestratepay.co.ke"
+                      android:pathPrefix="/pay/" />
+            </intent-filter>
+
+        </activity>
+
+        <!-- Programs a blank NTAG215 as the consumer's own identity tag -->
+        <activity
+            android:name=".nfc.ConsumerTagWriterActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:parentActivityName=".ui.HomeActivity" />
+
+        <!-- HCE service: responds to Sunmi terminal / SoftPOS APDU commands -->
+        <service
+            android:name=".hce.ConsumerHceService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/apduservice" />
+        </service>
+
+        <!-- FCM service: receives payment confirmation push notifications -->
+        <service
+            android:name=".realtime.ConsumerNotificationService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+    </application>
+</manifest>

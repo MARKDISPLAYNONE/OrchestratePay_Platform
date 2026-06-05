@@ -1,0 +1,5 @@
+rootProject.name = "OrchestratePay"
+include ':app'
+include ':nfc-core'
+include ':softpos'
+include ':consumer-wallet'

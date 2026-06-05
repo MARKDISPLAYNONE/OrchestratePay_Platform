@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AndroidManifest.xml
+  Declares permissions, activities, and services.
+  Key points:
+    1. NFC permission + uses-feature (filters to NFC-capable devices on Play Store)
+    2. HCE service declaration for Phase 2 consumer wallet
+    3. NFC intent filter in MerchantDashboardActivity
+    4. Network security config for cleartext HTTP in debug builds
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- NFC required — merchants always have NFC hardware (Sunmi P2 Pro) -->
+    <uses-feature android:name="android.hardware.nfc" android:required="true" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <application
+        android:name=".OrchestratePayApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.OrchestratePay">
+
+        <!-- LoginActivity is the launcher -->
+        <activity
+            android:name=".ui.LoginActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Main payment screen — receives NFC tag intents -->
+        <activity
+            android:name=".ui.MerchantDashboardActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait">
+
+            <!-- Handle OrchestratePay NDEF tags (orchestratepay:// URI scheme) -->
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="orchestratepay" />
+            </intent-filter>
+
+            <!-- Handle raw tech tags (IsoDep for bank cards, MIFARE for transit) -->
+            <intent-filter>
+                <action android:name="android.nfc.action.TECH_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.action.TECH_DISCOVERED"
+                android:resource="@xml/tech_list" />
+        </activity>
+
+        <activity
+            android:name=".ui.ReceiptActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.MerchantDashboardActivity" />
+
+        <!-- Programs a blank NTAG215 as a consumer identity tag (signed URI) -->
+        <activity
+            android:name=".nfc.TagWriterActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:parentActivityName=".ui.MerchantDashboardActivity" />
+
+        <!-- Programs a blank NTAG215 as a merchant display tag (HTTPS URL) -->
+        <activity
+            android:name=".nfc.DisplayTagWriterActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:parentActivityName=".ui.MerchantDashboardActivity" />
+
+        <!-- HCE service for Phase 2 consumer phone-as-card -->
+        <service
+            android:name=".hce.OrchestrateHceService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/apduservice" />
+        </service>
+
+    </application>
+</manifest>

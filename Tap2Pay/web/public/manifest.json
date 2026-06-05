@@ -1,0 +1,45 @@
+{
+  "name": "OrchestratePay",
+  "short_name": "OrchstPay",
+  "description": "NFC tap-to-pay for Kenyan SMEs",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#16a34a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["finance", "business"],
+  "shortcuts": [
+    {
+      "name": "Scan & Pay",
+      "url": "/consumer/dashboard",
+      "description": "View recent payments"
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.orchestratepay",
+      "id": "com.orchestratepay"
+    }
+  ],
+  "prefer_related_applications": false
+}

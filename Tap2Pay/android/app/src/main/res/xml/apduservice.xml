@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  apduservice.xml — declares the AID that routes NFC APDU commands to OrchestrateHceService.
+  AID F04F52434845535441 = "F0" + "ORCHESTA" in ASCII hex (proprietary range F0-FF).
+  category="other" means this is not a payment card in Android's default payment system —
+  it uses our own routing and won't conflict with Google Pay or Samsung Pay.
+-->
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/hce_service_description"
+    android:requireDeviceUnlock="true">
+    <aid-group android:category="other" android:description="@string/hce_aid_description">
+        <aid-filter android:name="F04F52434845535441" />
+    </aid-group>
+</host-apdu-service>

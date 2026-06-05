@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    network_security_config.xml — wallet app SSL/TLS hardening.
+
+    Same backend domain as the POS app. Replace placeholder pins with real
+    production cert pins before release:
+      openssl s_client -connect api.orchestratepay.co.ke:443 -servername api.orchestratepay.co.ke \
+        </dev/null 2>/dev/null | openssl x509 -pubkey -noout \
+        | openssl pkey -pubin -outform DER \
+        | openssl dgst -sha256 -binary | base64
+-->
+<network-security-config>
+
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">api.orchestratepay.co.ke</domain>
+        <pin-set expiration="2027-01-01">
+            <!-- Primary leaf cert pin — replace before release -->
+            <pin digest="SHA-256">REPLACE_WITH_REAL_PRIMARY_PIN=</pin>
+            <!-- Backup pin (intermediate CA) — replace before release -->
+            <pin digest="SHA-256">REPLACE_WITH_REAL_BACKUP_PIN=</pin>
+        </pin-set>
+    </domain-config>
+
+    <debug-overrides>
+        <!-- Allow user-installed CAs in debug builds for Charles/mitmproxy -->
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+</network-security-config>

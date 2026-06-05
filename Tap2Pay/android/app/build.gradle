@@ -1,0 +1,105 @@
+// App-module build.gradle
+// Defines dependencies, SDK versions, and build config for the Android app.
+
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'kotlin-kapt'          // for Room database annotation processing
+}
+
+android {
+    compileSdk 34
+    namespace "com.orchestratepay"
+
+    defaultConfig {
+        applicationId "com.orchestratepay"
+        minSdk 26               // Android 8 minimum — NFC HCE stable from API 19,
+                                // but we need API 26 for newer Kotlin coroutines support
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+
+        // Store backend URL in BuildConfig so we can swap sandbox/prod at compile time
+        buildConfigField "String", "API_BASE_URL", '"https://api-sandbox.orchestratepay.co.ke/v1/"'
+        buildConfigField "String", "WS_BASE_URL",  '"wss://api-sandbox.orchestratepay.co.ke"'
+        // Sentry DSN — override in CI via: -PSENTRY_DSN="https://..."
+        buildConfigField "String", "SENTRY_DSN", "\"${project.findProperty('SENTRY_DSN') ?: ''}\""
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+            buildConfigField "String", "API_BASE_URL", '"http://10.0.2.2:3000/api/v1/"'
+            buildConfigField "String", "WS_BASE_URL",  '"ws://10.0.2.2:3000"'
+        }
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            buildConfigField "String", "API_BASE_URL", '"https://api.orchestratepay.co.ke/api/v1/"'
+            buildConfigField "String", "WS_BASE_URL",  '"wss://api.orchestratepay.co.ke"'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+
+    buildFeatures {
+        viewBinding true   // eliminates findViewById boilerplate
+        buildConfig true
+    }
+}
+
+dependencies {
+    // Kotlin coroutines — for async NFC reads and payment polling
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    // Retrofit + OkHttp — HTTP client for backend API calls
+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.11.0'
+
+    // Room — local SQLite database for on-device audit log
+    implementation 'androidx.room:room-runtime:2.6.0'
+    implementation 'androidx.room:room-ktx:2.6.0'
+    kapt 'androidx.room:room-compiler:2.6.0'
+
+    // Lifecycle & ViewModel
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+
+    // ZXing — QR code scanner fallback when NFC unavailable
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    implementation 'com.google.zxing:core:3.5.2'
+
+    // Security — for storing JWT token in encrypted SharedPreferences
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+
+    // Sentry — crash reporting and payment-flow error tracking
+    // isSendDefaultPii=false in OrchestratePayApp ensures no PII is transmitted
+    implementation 'io.sentry:sentry-android:7.6.0'
+
+    // Sunmi printer SDK — thermal receipt printing on P2 Pro
+    // Note: download woyou-aidl-definitions from Sunmi developer portal
+    // and place the .aar in app/libs/ or add via JitPack
+    // implementation 'com.github.sunmi:printer-sdk:1.0.19'
+
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.core:core-ktx:1.12.0'
+
+    // Unit tests (JVM — run with ./gradlew test, no device needed)
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.mockito:mockito-core:5.7.0'
+    testImplementation 'org.mockito.kotlin:mockito-kotlin:5.2.1'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3'
+
+    // Instrumented tests (run with ./gradlew connectedAndroidTest)
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+    androidTestImplementation 'androidx.test:rules:1.5.0'
+}
