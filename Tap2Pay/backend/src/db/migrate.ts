@@ -584,6 +584,43 @@ CREATE TABLE IF NOT EXISTS consumer_refresh_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_consumer
   ON consumer_refresh_tokens(consumer_id) WHERE revoked_at IS NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- MERCHANT REFRESH TOKENS
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS merchant_refresh_tokens (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  merchant_id  UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+  token_hash   TEXT NOT NULL UNIQUE,
+  issued_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at   TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '30 days',
+  revoked_at   TIMESTAMPTZ,
+  device_hint  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_merchant_refresh_tokens_merchant
+  ON merchant_refresh_tokens(merchant_id) WHERE revoked_at IS NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ETIMS SEQUENTIAL INVOICE NUMBER
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Produces sequential KRA-compliant invoice numbers: INV-YYYY-NNNNNN
+-- The sequence resets at application level at year boundary (not DB level
+-- since Postgres sequences don't support auto-reset by year natively).
+CREATE SEQUENCE IF NOT EXISTS etims_invoice_seq START 1;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SCHEMA MIGRATIONS TRACKING
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Records which named migrations have been applied so we can safely add
+-- incremental changes in future without re-running the entire SQL block.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version     TEXT PRIMARY KEY,
+  applied_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO schema_migrations (version) VALUES ('001_initial')
+  ON CONFLICT (version) DO NOTHING;
 `
 
 async function migrate() {

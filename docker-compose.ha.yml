@@ -1,0 +1,180 @@
+# docker-compose.ha.yml — High-Availability development environment
+# Mirrors the production topology: PostgreSQL with streaming replication,
+# Redis Sentinel, and multiple backend replicas behind a load balancer.
+#
+# Usage:
+#   docker compose -f docker-compose.ha.yml up -d
+#   docker compose -f docker-compose.ha.yml ps
+#
+# NOTE: This is for local HA testing only. In production, use the K8s
+# manifests in infra/k8s/ with managed RDS and Elasticache.
+
+version: "3.9"
+
+# ─── PostgreSQL replication ───────────────────────────────────────────────────
+# Primary + 1 replica using bitnami/postgresql which ships with replication
+# support baked in.
+
+services:
+  postgres-primary:
+    image: bitnami/postgresql:15
+    restart: unless-stopped
+    environment:
+      POSTGRESQL_REPLICATION_MODE:     master
+      POSTGRESQL_REPLICATION_USER:     replicator
+      POSTGRESQL_REPLICATION_PASSWORD: replpass
+      POSTGRESQL_DATABASE:             orchestratepay
+      POSTGRESQL_USERNAME:             orchestratepay
+      POSTGRESQL_PASSWORD:             devpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgprimary_data:/bitnami/postgresql
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U orchestratepay"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-replica:
+    image: bitnami/postgresql:15
+    restart: unless-stopped
+    environment:
+      POSTGRESQL_REPLICATION_MODE:     slave
+      POSTGRESQL_REPLICATION_USER:     replicator
+      POSTGRESQL_REPLICATION_PASSWORD: replpass
+      POSTGRESQL_MASTER_HOST:          postgres-primary
+      POSTGRESQL_MASTER_PORT_NUMBER:   5432
+      POSTGRESQL_PASSWORD:             devpassword
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    volumes:
+      - pgreplica_data:/bitnami/postgresql
+
+# ─── Redis Sentinel ───────────────────────────────────────────────────────────
+
+  redis-master:
+    image: bitnami/redis:7.0
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD:               devredispass
+      REDIS_REPLICATION_MODE:       master
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_master_data:/bitnami/redis/data
+    healthcheck:
+      test: [CMD, redis-cli, -a, devredispass, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-slave:
+    image: bitnami/redis:7.0
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD:               devredispass
+      REDIS_REPLICATION_MODE:       slave
+      REDIS_MASTER_HOST:            redis-master
+      REDIS_MASTER_PORT_NUMBER:     6379
+      REDIS_MASTER_PASSWORD:        devredispass
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    volumes:
+      - redis_slave_data:/bitnami/redis/data
+
+  redis-sentinel-1:
+    image: bitnami/redis-sentinel:7.0
+    restart: unless-stopped
+    environment:
+      REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS: 5000
+      REDIS_MASTER_HOST:                      redis-master
+      REDIS_MASTER_PORT_NUMBER:               6379
+      REDIS_MASTER_PASSWORD:                  devredispass
+      REDIS_SENTINEL_QUORUM:                  2
+    ports:
+      - "26379:26379"
+    depends_on:
+      - redis-master
+      - redis-slave
+
+  redis-sentinel-2:
+    image: bitnami/redis-sentinel:7.0
+    restart: unless-stopped
+    environment:
+      REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS: 5000
+      REDIS_MASTER_HOST:                      redis-master
+      REDIS_MASTER_PORT_NUMBER:               6379
+      REDIS_MASTER_PASSWORD:                  devredispass
+      REDIS_SENTINEL_QUORUM:                  2
+    ports:
+      - "26380:26379"
+    depends_on:
+      - redis-master
+      - redis-slave
+
+  redis-sentinel-3:
+    image: bitnami/redis-sentinel:7.0
+    restart: unless-stopped
+    environment:
+      REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS: 5000
+      REDIS_MASTER_HOST:                      redis-master
+      REDIS_MASTER_PORT_NUMBER:               6379
+      REDIS_MASTER_PASSWORD:                  devredispass
+      REDIS_SENTINEL_QUORUM:                  2
+    ports:
+      - "26381:26379"
+    depends_on:
+      - redis-master
+      - redis-slave
+
+# ─── Backend replicas ─────────────────────────────────────────────────────────
+
+  backend-1:
+    build:
+      context: ./Tap2Pay/backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV:     production
+      DATABASE_URL: postgres://orchestratepay:devpassword@postgres-primary:5432/orchestratepay
+      REDIS_URL:    redis://:devredispass@redis-master:6379
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+
+  backend-2:
+    build:
+      context: ./Tap2Pay/backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV:     production
+      DATABASE_URL: postgres://orchestratepay:devpassword@postgres-primary:5432/orchestratepay
+      REDIS_URL:    redis://:devredispass@redis-master:6379
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+
+  nginx-lb:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    volumes:
+      - ./infra/nginx/nginx-lb.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend-1
+      - backend-2
+
+volumes:
+  pgprimary_data:
+  pgreplica_data:
+  redis_master_data:
+  redis_slave_data:

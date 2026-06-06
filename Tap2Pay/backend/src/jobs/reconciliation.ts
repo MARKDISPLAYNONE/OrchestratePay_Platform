@@ -35,11 +35,22 @@ import { db } from '../db/index'
 import { redis } from '../db/redis'
 import { stkQuery } from '../integrations/daraja'
 import { logger } from '../util/logger'
+import { withDistributedLock } from '../util/distributed-lock'
 
 const RECONCILE_AFTER_MINUTES = 5    // only check transactions older than this
 const EXPIRE_AFTER_MINUTES = 90      // expire transactions older than this
 
 export async function runReconciliation(): Promise<void> {
+  // Distributed lock: TTL = 4 min 50 s (slightly less than the 5-min schedule).
+  // If one pod holds the lock, other pods skip this run entirely — no duplicate
+  // Daraja STK Queries, no double-confirm notifications.
+  const ran = await withDistributedLock('reconciliation', 290, () => _reconcile())
+  if (!ran) {
+    logger.info('Reconciliation: skipped (another pod is running it)')
+  }
+}
+
+async function _reconcile(): Promise<void> {
   logger.info('Reconciliation job starting')
   const started = Date.now()
   let processed = 0, confirmed = 0, declined = 0, expired = 0

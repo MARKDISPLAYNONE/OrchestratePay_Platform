@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Enable PWA via next-pwa in production
-  // output: 'standalone',  // uncomment for Docker deployment
+  output: 'standalone',
 
   // Rewrites proxy /api to the Express backend in development
   async rewrites() {

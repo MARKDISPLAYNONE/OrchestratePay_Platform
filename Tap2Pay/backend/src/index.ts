@@ -19,6 +19,8 @@
  * to ensure only one instance runs the reconciliation job at a time.
  */
 import 'dotenv/config'  // must be first — loads .env before anything else imports process.env
+import { initSentry } from './util/sentry'
+initSentry()  // initialise before any other import that could throw
 
 import http from 'http'
 import express from 'express'
@@ -28,7 +30,7 @@ import morgan from 'morgan'
 import rateLimit from 'express-rate-limit'
 import cron from 'node-cron'
 
-import { dbHealthCheck } from './db/index'
+import { dbHealthCheck, db } from './db/index'
 import { redisHealthCheck } from './db/redis'
 import { logger } from './util/logger'
 import { runReconciliation } from './jobs/reconciliation'
@@ -51,9 +53,9 @@ import consumersRouter              from './routes/consumers'
 import attestationRouter            from './routes/attestation'
 import { refreshAllRates }          from './util/fx'
 import { runGlPostingJob }          from './jobs/gl-posting'
-import { db }                       from './db/index'
 import paymentLinksRouter           from './routes/payment-links'
 import splitPaymentsRouter          from './routes/split-payments'
+import paymentRailsRouter           from './routes/payment-rails'
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '3000')
@@ -70,9 +72,24 @@ app.set('trust proxy', 1)
 // Correlation ID — must be first so every subsequent log line can include it
 app.use(requestId)
 
-// Helmet sets security headers: X-Frame-Options, X-XSS-Protection, etc.
-// Protects against clickjacking, content sniffing, and other common web attacks.
-app.use(helmet())
+// Helmet sets security headers + Content-Security-Policy.
+// CSP restricts what scripts/styles/frames the dashboard can load.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:     ["'self'"],
+      scriptSrc:      ["'self'"],
+      styleSrc:       ["'self'", "'unsafe-inline'"],  // Tailwind inline styles
+      imgSrc:         ["'self'", 'data:', 'blob:'],    // QR code data URIs
+      connectSrc:     ["'self'", 'wss:'],              // WebSocket connection
+      fontSrc:        ["'self'"],
+      objectSrc:      ["'none'"],
+      frameAncestors: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  crossOriginEmbedderPolicy: false,  // required for QR code generation in canvas
+}))
 
 // CORS: only allow requests from our Android app's domain (not from browsers)
 // In production, restrict to your specific domains
@@ -134,6 +151,25 @@ app.get('/health', (_, res) => res.json({
   version:   process.env.npm_package_version || '1.0.0',
 }))
 
+// Readiness probe — used by Kubernetes before routing traffic.
+// Returns 503 if either DB or Redis is not reachable.
+app.get('/readiness', async (_, res) => {
+  try {
+    await Promise.all([
+      db.query('SELECT 1'),          // verify Postgres connection
+      redisHealthCheck(),            // verify Redis connection
+    ])
+    res.json({ status: 'ready', timestamp: new Date().toISOString() })
+  } catch (err: any) {
+    logger.warn('Readiness check failed', { error: err.message })
+    res.status(503).json({
+      status:    'not_ready',
+      error:     err.message,
+      timestamp: new Date().toISOString(),
+    })
+  }
+})
+
 // Deep health check — used by monitoring/alerting (Grafana, UptimeRobot, etc.)
 // Returns per-component status so on-call can see exactly what is degraded.
 app.get('/health/deep', async (_, res) => {
@@ -176,6 +212,7 @@ app.use('/api/v1/admin/fleet',    adminFleetRouter)
 app.use('/api/v1/admin/fx',       adminFxRouter)        // FX admin (force refresh)
 app.use('/api/v1/payment-links',  paymentLinksRouter)   // shareable single-use payment links
 app.use('/api/v1/split-payments', splitPaymentsRouter)  // group bill splitting
+app.use('/api/v1/rails',          paymentRailsRouter)   // multi-currency payment rail routing
 // requireSafaricomIp blocks non-Safaricom IPs in production (bypass in dev/test)
 app.use('/api/v1/mpesa-callback', requireSafaricomIp, mpesaCallbackRouter)
 

@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestratepay-backend
+  namespace: orchestratepay
+  labels:
+    app: orchestratepay-backend
+    tier: backend
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: orchestratepay-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: orchestratepay-backend
+        tier: backend
+      annotations:
+        # Trigger a rollout when the secret changes
+        checksum/secret: "{{ include (print $.Template.BasePath \"/secret.yaml\") . | sha256sum }}"
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+
+      containers:
+        - name: backend
+          image: ghcr.io/orchestratepay/backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3001
+              name: http
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3001"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: orchestratepay-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: orchestratepay-secrets
+                  key: redis-url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: orchestratepay-secrets
+                  key: jwt-secret
+            - name: DARAJA_CONSUMER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: orchestratepay-secrets
+                  key: daraja-consumer-key
+            - name: DARAJA_CONSUMER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: orchestratepay-secrets
+                  key: daraja-consumer-secret
+            - name: DARAJA_SHORTCODE
+              valueFrom:
+                secretKeyRef:
+                  name: orchestratepay-secrets
+                  key: daraja-shortcode
+            - name: DARAJA_PASSKEY
+              valueFrom:
+                secretKeyRef:
+                  name: orchestratepay-secrets
+                  key: daraja-passkey
+            - name: DARAJA_CALLBACK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestratepay-config
+                  key: daraja-callback-url
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: orchestratepay-secrets
+                  key: sentry-dsn
+                  optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}

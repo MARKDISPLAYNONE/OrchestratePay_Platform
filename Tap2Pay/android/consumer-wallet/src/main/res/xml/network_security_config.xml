@@ -1,17 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  network_security_config.xml — TLS certificate pinning for the consumer wallet app.
+  Uses the same ISRG Root X1/X2 pins as the merchant terminal app.
+  See app/src/main/res/xml/network_security_config.xml for full pin rationale.
+-->
 <network-security-config>
-    <!-- Production: only HTTPS/WSS to our API domain -->
-    <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="true">orchestratepay.co.ke</domain>
-    </domain-config>
-    <!-- Debug: allow cleartext to the emulator host (10.0.2.2 = localhost on host machine) -->
+
+    <!-- Debug builds: trust user-installed CAs for proxy debugging -->
     <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+    <!-- Production API and WebSocket endpoint -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.orchestratepay.co.ke</domain>
+        <pin-set expiration="2028-01-01">
+            <!-- PRIMARY: ISRG Root X1 (RSA 4096) -->
+            <pin digest="SHA-256">C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=</pin>
+            <!-- BACKUP: ISRG Root X2 (ECDSA P-384) -->
+            <pin digest="SHA-256">diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvmFZRIjnadY=</pin>
+        </pin-set>
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
-        <domain-config cleartextTrafficPermitted="true">
-            <domain includeSubdomains="true">10.0.2.2</domain>
-            <domain includeSubdomains="true">localhost</domain>
-        </domain-config>
-    </debug-overrides>
+    </domain-config>
+
+    <!-- Consumer web portal -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">orchestratepay.co.ke</domain>
+        <pin-set expiration="2028-01-01">
+            <pin digest="SHA-256">C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=</pin>
+            <pin digest="SHA-256">diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvmFZRIjnadY=</pin>
+        </pin-set>
+    </domain-config>
+
+    <!-- Local development -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
 </network-security-config>

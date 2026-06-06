@@ -1,0 +1,80 @@
+# docker-compose.yml — Development environment
+# Starts: backend, web, PostgreSQL, Redis
+#
+# Usage:
+#   docker compose up -d               # start all services
+#   docker compose up backend web      # start specific services
+#   docker compose logs -f backend     # follow logs
+#   docker compose down -v             # stop and remove volumes
+
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       orchestratepay
+      POSTGRES_USER:     orchestratepay
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U orchestratepay"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass devredispass --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [CMD, redis-cli, -a, devredispass, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./Tap2Pay/backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./Tap2Pay/backend/.env.example
+    environment:
+      NODE_ENV:     development
+      DATABASE_URL: postgres://orchestratepay:devpassword@postgres:5432/orchestratepay
+      REDIS_URL:    redis://:devredispass@redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./Tap2Pay/backend/src:/app/src:ro
+
+  web:
+    build:
+      context: ./Tap2Pay/web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NODE_ENV:            development
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:

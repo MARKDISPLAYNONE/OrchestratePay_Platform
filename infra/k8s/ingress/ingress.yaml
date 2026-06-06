@@ -1,0 +1,45 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: orchestratepay-ingress
+  namespace: orchestratepay
+  annotations:
+    kubernetes.io/ingress.class:                    nginx
+    cert-manager.io/cluster-issuer:                 letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect:       "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size:    "1m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    # Security headers (supplement backend helmet() headers)
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+spec:
+  tls:
+    - hosts:
+        - api.orchestratepay.co.ke
+        - orchestratepay.co.ke
+      secretName: orchestratepay-tls
+  rules:
+    - host: api.orchestratepay.co.ke
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: orchestratepay-backend
+                port:
+                  number: 80
+    - host: orchestratepay.co.ke
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: orchestratepay-web
+                port:
+                  number: 80

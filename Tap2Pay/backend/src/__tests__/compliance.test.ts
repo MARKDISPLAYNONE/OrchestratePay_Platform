@@ -91,15 +91,15 @@ describe('7-year CBK audit retention (daraja_callback_log)', () => {
 
 // ─── State machine audit events ───────────────────────────────────────────────
 
-type TxnStatus = 'PENDING' | 'STK_SENT' | 'CONFIRMED' | 'DECLINED' | 'FAILED' | 'EXPIRED'
+type ComplianceTxnStatus = 'PENDING' | 'STK_SENT' | 'CONFIRMED' | 'DECLINED' | 'FAILED' | 'EXPIRED'
 
 interface AuditEntry {
   event: string
-  fromStatus: TxnStatus
-  toStatus: TxnStatus
+  fromStatus: ComplianceTxnStatus
+  toStatus: ComplianceTxnStatus
 }
 
-function buildAuditEntry(fromStatus: TxnStatus, toStatus: TxnStatus): AuditEntry {
+function buildAuditEntry(fromStatus: ComplianceTxnStatus, toStatus: ComplianceTxnStatus): AuditEntry {
   return {
     event: `STATUS_CHANGE:${fromStatus}→${toStatus}`,
     fromStatus,
@@ -107,8 +107,8 @@ function buildAuditEntry(fromStatus: TxnStatus, toStatus: TxnStatus): AuditEntry
   }
 }
 
-function isForwardTransition(from: TxnStatus, to: TxnStatus): boolean {
-  const ORDER: Record<TxnStatus, number> = {
+function isForwardTransition(from: ComplianceTxnStatus, to: ComplianceTxnStatus): boolean {
+  const ORDER: Record<ComplianceTxnStatus, number> = {
     PENDING: 0, STK_SENT: 1, CONFIRMED: 2, DECLINED: 2, FAILED: 2, EXPIRED: 2
   }
   return ORDER[to] > ORDER[from]

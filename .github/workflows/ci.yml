@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel in-progress runs on the same branch when a new push arrives.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
 
   # ── Backend: type-check + test ─────────────────────────────────────────────
@@ -89,11 +94,161 @@ jobs:
           name: backend-coverage
           path: Tap2Pay/backend/coverage/
 
+  # ── Web: type-check + build ────────────────────────────────────────────────
+  web:
+    name: Web — type-check & build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: Tap2Pay/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Tap2Pay/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Next.js build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+
+  # ── Playwright E2E tests ───────────────────────────────────────────────────
+  e2e:
+    name: E2E — Playwright
+    runs-on: ubuntu-latest
+    needs: [backend, web]
+    # Run E2E on main pushes and PRs targeting main
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: orchestratepay_test
+          POSTGRES_USER: orchestrate
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orchestrate"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://orchestrate:testpassword@localhost:5432/orchestratepay_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-test-jwt-secret-not-for-production
+      DARAJA_CONSUMER_KEY: test-key
+      DARAJA_CONSUMER_SECRET: test-secret
+      DARAJA_SHORTCODE: "174379"
+      DARAJA_PASSKEY: bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919
+      DARAJA_CALLBACK_BASE_URL: http://localhost:3001
+      NODE_ENV: test
+      LOG_LEVEL: error
+      ADMIN_SECRET: ci-admin-secret
+      NFC_SIGNING_SECRET: ci-nfc-secret
+      SMS_ENABLED: "false"
+      PLAY_INTEGRITY_REQUIRED: "false"
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            Tap2Pay/backend/package-lock.json
+            Tap2Pay/web/package-lock.json
+
+      - name: Install backend deps, build & run migrations
+        working-directory: Tap2Pay/backend
+        run: npm ci && npm run build && npm run migrate
+
+      - name: Start backend server
+        working-directory: Tap2Pay/backend
+        run: node dist/index.js &
+        env:
+          PORT: 3001
+          NODE_ENV: production
+
+      - name: Install web deps
+        working-directory: Tap2Pay/web
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: Tap2Pay/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Wait for backend to be ready
+        run: npx --yes wait-on http://localhost:3001/health --timeout 60000
+
+      # Build the web app and start it so Playwright has something to test.
+      # NODE_ENV must be production for next build; NEXT_PUBLIC_API_URL is
+      # injected at build time so it ends up baked into client bundles.
+      - name: Build web app
+        working-directory: Tap2Pay/web
+        run: npm run build
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+
+      - name: Start web server
+        working-directory: Tap2Pay/web
+        run: npm start &
+        env:
+          PORT: 3000
+          NODE_ENV: production
+
+      - name: Wait for web server to be ready
+        run: npx --yes wait-on http://localhost:3000 --timeout 60000
+
+      - name: Run Playwright E2E tests
+        working-directory: Tap2Pay/web
+        run: npx playwright test --reporter=html
+        env:
+          CI: true
+          BASE_URL: http://localhost:3000
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: Tap2Pay/web/playwright-report/
+          retention-days: 14
+
   # ── Load test (smoke) — runs on main branch only ──────────────────────────
   load-test:
     name: Load test — smoke (2 VUs × 30 s)
     runs-on: ubuntu-latest
-    needs: backend          # only run after tests pass
+    needs: backend
     if: github.ref == 'refs/heads/main'
 
     services:
@@ -156,13 +311,17 @@ jobs:
       - name: Run migrations
         run: npm run migrate
 
+      - name: Build backend
+        run: npm run build
+
       - name: Start backend server
-        run: node -r ts-node/register src/index.ts &
+        run: node dist/index.js &
         env:
           PORT: 3000
+          NODE_ENV: production
 
       - name: Wait for server to be ready
-        run: npx wait-on http://localhost:3000/health --timeout 30000
+        run: npx --yes wait-on http://localhost:3000/health --timeout 30000
 
       - name: Install k6
         run: |
@@ -198,7 +357,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: wrapper
 
@@ -213,3 +372,118 @@ jobs:
         with:
           name: debug-apk
           path: Tap2Pay/android/app/build/outputs/apk/debug/app-debug.apk
+
+  # ── Docker: build + push to GHCR ──────────────────────────────────────────
+  docker-build:
+    name: Docker — build & push images
+    runs-on: ubuntu-latest
+    needs: [backend, web, android]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (backend)
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/orchestratepay-backend
+          tags: |
+            type=sha,prefix=,suffix=,format=short
+            type=raw,value=latest
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Tap2Pay/backend
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata (web)
+        id: meta-web
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/orchestratepay-web
+          tags: |
+            type=sha,prefix=,suffix=,format=short
+            type=raw,value=latest
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Tap2Pay/web
+          push: true
+          tags: ${{ steps.meta-web.outputs.tags }}
+          labels: ${{ steps.meta-web.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://api.orchestratepay.co.ke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Staging deploy ─────────────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy — staging
+    runs-on: ubuntu-latest
+    needs: [docker-build, e2e]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: https://staging.orchestratepay.co.ke
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        # KUBE_CONFIG must be added as an Environment Secret on the 'staging'
+        # environment in GitHub repo Settings → Environments → staging → Secrets.
+        # Value: base64-encoded kubeconfig (cat ~/.kube/config | base64 -w 0)
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> "$GITHUB_ENV"
+
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Container names must match the `name:` field inside the Deployment's
+      # containers list — backend → "backend", web → "web" (from k8s manifests).
+      - name: Update backend image tag
+        run: |
+          kubectl set image deployment/orchestratepay-backend \
+            backend=ghcr.io/${{ github.repository_owner }}/orchestratepay-backend:${{ steps.sha.outputs.short }} \
+            --namespace orchestratepay --record
+
+      - name: Update web image tag
+        run: |
+          kubectl set image deployment/orchestratepay-web \
+            web=ghcr.io/${{ github.repository_owner }}/orchestratepay-web:${{ steps.sha.outputs.short }} \
+            --namespace orchestratepay --record
+
+      - name: Wait for rollout to complete
+        run: |
+          kubectl rollout status deployment/orchestratepay-backend --namespace orchestratepay --timeout=120s
+          kubectl rollout status deployment/orchestratepay-web      --namespace orchestratepay --timeout=120s
+
+      - name: Smoke test staging readiness
+        run: |
+          curl -sf https://api.staging.orchestratepay.co.ke/health || \
+            (echo "Staging health check failed" && exit 1)

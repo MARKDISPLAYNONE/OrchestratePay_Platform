@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+*.test.ts
+src/__tests__
+coverage
+*.md
+.env
+.env.*
+load-test.js
+load-test-results.json

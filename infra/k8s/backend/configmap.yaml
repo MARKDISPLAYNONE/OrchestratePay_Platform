@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orchestratepay-config
+  namespace: orchestratepay
+data:
+  daraja-callback-url:   "https://api.orchestratepay.co.ke/api/v1/payments/mpesa/callback"
+  daraja-env:            "production"
+  daraja-timeout-s:      "30"
+  log-level:             "info"
+  max-request-size-kb:   "512"
+  rate-limit-window-ms:  "60000"
+  rate-limit-max:        "100"
+  cors-origin:           "https://orchestratepay.co.ke"
+  etims-enabled:         "true"

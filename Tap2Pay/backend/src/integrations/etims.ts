@@ -84,6 +84,23 @@ async function postToEtims(invoice: EtimsInvoice): Promise<EtimsResult> {
 }
 
 /**
+ * Generates a sequential, year-prefixed invoice number from the DB sequence.
+ * Format: INV-2026-000042
+ * Falls back to a random suffix if the sequence query fails (non-fatal).
+ */
+async function nextInvoiceNumber(db: Pool): Promise<string> {
+    try {
+        const { rows } = await db.query("SELECT nextval('etims_invoice_seq') AS seq")
+        const seq  = String(rows[0].seq).padStart(6, '0')
+        const year = new Date().getUTCFullYear()
+        return `INV-${year}-${seq}`
+    } catch {
+        // Sequence unavailable (e.g. test environment) — use random fallback
+        return `INV-FALLBACK-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
+    }
+}
+
+/**
  * Submit a fiscal invoice and record it in fiscal_log.
  * Never throws — returns silently on failure after logging.
  */
@@ -92,7 +109,7 @@ export async function submitFiscalInvoice(
     db: Pool
 ): Promise<void> {
     const { vatCents } = vatBreakdown(invoice.amountCents)
-    const invoiceNumber = `DRAFT-${crypto.randomUUID()}`  // placeholder until eTIMS confirms
+    const invoiceNumber = await nextInvoiceNumber(db)
 
     // Insert initial QUEUED row
     const { rows } = await db.query(`
