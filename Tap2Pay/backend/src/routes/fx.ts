@@ -14,6 +14,7 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { getAllRates, refreshAllRates, SUPPORTED_CURRENCIES } from '../util/fx'
 import { logger } from '../util/logger'
+import { writeAuditLog } from '../util/audit'
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET) {
@@ -54,10 +55,15 @@ router.get('/rates', async (_req: Request, res: Response) => {
 
 export const adminFxRouter = Router()
 
-adminFxRouter.post('/rates/refresh', requireAdmin, async (_req: Request, res: Response) => {
+adminFxRouter.post('/rates/refresh', requireAdmin, async (req: Request, res: Response) => {
   try {
     const count = await refreshAllRates()
     logger.info('Admin-triggered FX rate refresh', { count })
+    await writeAuditLog({
+      event:  'ADMIN_ACTION',
+      detail: { action: 'fx_rates_refresh', ratesRefreshed: count },
+      ip:     req.ip,
+    })
     res.json({ ok: true, ratesRefreshed: count })
   } catch (err: any) {
     logger.error('Admin FX refresh failed', { error: err.message })

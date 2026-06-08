@@ -7,11 +7,21 @@
  *                    GET  /api/v1/admin/fleet/alerts
  *                    POST /api/v1/admin/fleet/:deviceId/config
  */
-import { Router } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
 import { db } from '../db/index'
 import { requireAuth } from '../middleware/auth'
 import { logger } from '../util/logger'
 import { sendSms, SmsTemplate } from '../integrations/africas-talking'
+import { writeAuditLog } from '../util/audit'
+
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const secret = req.headers['x-admin-secret']
+  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+    logger.warn('Unauthorised admin fleet access', { ip: req.ip, path: req.path })
+    return res.status(403).json({ error: 'Admin access required' })
+  }
+  next()
+}
 
 const router = Router()
 
@@ -115,6 +125,8 @@ async function evaluateAlerts(deviceId: string, merchantId: string, t: any) {
 
 export const adminFleetRouter = Router()
 
+adminFleetRouter.use(requireAdmin)
+
 adminFleetRouter.get('/', async (_req, res) => {
     const { rows } = await db.query(`
         SELECT
@@ -166,13 +178,20 @@ adminFleetRouter.get('/:deviceId', async (req, res) => {
     })
 })
 
-adminFleetRouter.post('/:deviceId/config', async (req, res) => {
+adminFleetRouter.post('/:deviceId/config', async (req: Request, res: Response) => {
     const { deviceId } = req.params
     const { minAppVersionCode, pollIntervalMs, wsEnabled, debugLogging } = req.body
 
-    // In a full implementation, store these in a device_config table.
-    // For now, acknowledge — the real config is delivered via telemetry response.
     logger.info('Remote config pushed', { deviceId, minAppVersionCode, pollIntervalMs, wsEnabled, debugLogging })
+
+    await writeAuditLog({
+      event:      'ADMIN_ACTION',
+      entityType: 'device',
+      entityId:   deviceId,
+      detail:     { action: 'remote_config_push', minAppVersionCode, pollIntervalMs, wsEnabled, debugLogging },
+      ip:         req.ip,
+    })
+
     res.json({ ok: true })
 })
 

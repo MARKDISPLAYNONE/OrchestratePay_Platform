@@ -268,14 +268,16 @@ LOG_LEVEL=info
 
 Critical items before production:
 
-- [ ] Add distributed Redlock to reconciliation job (required before running 2+ backend instances)
-- [ ] Set up CI/CD pipeline (GitHub Actions — tests + lint + Docker build on every PR)
-- [ ] Add Kubernetes/Helm manifests for production deployment
-- [ ] Replace placeholder TLS certificate pins in `network_security_config.xml`
-- [ ] Add JWT refresh token rotation (current 8-hour access tokens have no revocation)
-- [ ] Integrate Sentry (production errors currently go to stdout only)
-- [ ] Add `/readiness` probe (current `/health` always returns 200 regardless of DB state)
-- [ ] Implement account lockout after failed login attempts
+- [x] Add distributed Redlock to reconciliation job — implemented in `util/distributed-lock.ts`, used by reconciliation job
+- [x] Set up CI/CD pipeline — `.github/workflows/ci.yml` runs tests, lint, and Docker build on every PR
+- [ ] Add Kubernetes/Helm manifests for production deployment — deferred, in progress
+- [x] Replace placeholder TLS certificate pins in `network_security_config.xml` — pins to ISRG Root X1/X2 (Let's Encrypt CA), survives 90-day cert renewals
+- [x] Add JWT refresh token rotation — `merchant_refresh_tokens` table + `issueMerchantRefreshToken` in `auth.ts`
+- [x] Integrate Sentry — `@sentry/node` wired in `util/sentry.ts`, initialised at startup
+- [x] Add `/readiness` probe — `GET /readiness` checks PostgreSQL + Redis, returns 503 on failure
+- [x] Implement account lockout after failed login attempts — Redis-based per-email lockout (5 attempts → 15 min) in `auth.ts`
+- [x] Migration versioning — `migrate.ts` rewritten as versioned runner; migrations live in `src/db/migrations/`
+- [x] Admin endpoint audit logging — `requireAdmin` guard + `writeAuditLog` added to fleet config push and FX force-refresh
 
 See `Tap2Pay/README.md` for the full pre-launch checklist with implementation details.
 

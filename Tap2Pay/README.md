@@ -682,39 +682,37 @@ Test suite (34 files, 717 assertions, ~34 seconds):
 
 ## Known Gaps / Pre-launch Checklist
 
-These items are confirmed absent from the codebase and must be resolved before going live.
-
 ### Critical
 
-- [ ] **Distributed reconciliation lock** — `runReconciliation()` runs on every backend instance via `setInterval`. Running 2+ instances in production causes parallel Daraja STK Queries and duplicate Redis publishes. Add Redlock before any horizontal scaling.
+- [x] **Distributed reconciliation lock** — `util/distributed-lock.ts` implements a Redis SET NX lock; `runReconciliation()` acquires it before each run. Safe for multi-instance deployments.
 
-- [ ] **CI/CD pipeline** — No `.github/workflows/` exists. There is no automated test run, lint check, or Docker build on push. Create a GitHub Actions workflow that runs `npm test`, `npm run lint`, and `docker build` on every pull request.
+- [x] **CI/CD pipeline** — `.github/workflows/ci.yml` runs `npm test`, `npm run lint`, and `docker build` on every push to `main`/`develop` and on all PRs.
 
-- [ ] **Kubernetes deployment manifests** — No `k8s/` or Helm chart. The `docker-compose.yml` is for local dev only. Add a `Deployment`, `Service`, and `Ingress` manifest before multi-node production deployment.
+- [ ] **Kubernetes deployment manifests** — No `k8s/` or Helm chart yet. The `docker-compose.yml` is for local dev only. Required before multi-node production deployment. *(In progress)*
 
-- [ ] **Real TLS certificate pins in Android** — `network_security_config.xml` contains placeholder SHA-256 values. Certificate pinning is non-functional until replaced with pins from the real TLS certificate. See [Running on a Device](#running-on-a-device) for the `openssl` command.
+- [x] **TLS certificate pins in Android** — `network_security_config.xml` pins to ISRG Root X1 + X2 (Let's Encrypt CA-level pinning). Survives 90-day leaf cert renewals without an app update. Backup pin covers ECDSA root transition.
 
-- [ ] **JWT refresh token rotation** — Access tokens have an 8-hour TTL with no revocation path. A stolen token is valid until expiry. Add short-lived access tokens (15 min) + long-lived refresh tokens (7 days, rotated on use, stored as a hash in DB).
+- [x] **JWT refresh token rotation** — `merchant_refresh_tokens` table tracks hashed refresh tokens. `issueMerchantRefreshToken` / `refreshMerchantToken` in `auth.ts` implement rotation on use.
 
 ### High
 
-- [ ] **Sentry or equivalent error tracking** — Production errors are logged to stdout only. No centralized aggregation, no alerting. Add `@sentry/node` and set `SENTRY_DSN` before launch.
+- [x] **Sentry error tracking** — `@sentry/node` installed, `util/sentry.ts` initialised before any other import in `index.ts`. Set `SENTRY_DSN` in production `.env`.
 
-- [ ] **Readiness probe** — `GET /health` returns 200 unconditionally. Kubernetes routes traffic to pods with dead DB connections. Add `GET /readiness` that runs `SELECT 1` against Postgres and `PING` against Redis and returns 503 on failure.
+- [x] **Readiness probe** — `GET /readiness` runs `SELECT 1` against PostgreSQL and `PING` against Redis; returns 503 if either fails. (`GET /health` is the liveness probe, always 200.)
 
-- [ ] **Account lockout on `/auth/login`** — There is no per-account failed attempt counter. The global rate limit (100 req/min) does not stop a distributed credential stuffing attack. Lock accounts for 15 minutes after 5 consecutive failed logins and log to `server_audit_log`.
+- [x] **Account lockout on `/auth/login`** — Redis key `auth:lockout:{email}` tracks failed attempts. After 5 consecutive failures the account is locked for 15 minutes; event written to `server_audit_log`.
 
 ### Medium
 
-- [ ] **`.env.example`** — Documented in this README but not as a file. New developers and CI environments must manually transcribe variables from README. Create `backend/.env.example` with placeholder values.
+- [x] **`.env.example`** — `backend/.env.example` exists with all required and optional variables documented with placeholder values.
 
-- [ ] **Migration versioning** — `migrate.ts` is a one-shot `CREATE TABLE IF NOT EXISTS` script. Schema changes must be applied manually to existing databases. Migrate to `node-pg-migrate` or Flyway before the first post-launch schema change.
+- [x] **Migration versioning** — `migrate.ts` rewritten as a file-based versioned runner. Each migration is a numbered `.sql` file in `src/db/migrations/`. The runner checks `schema_migrations` before applying and skips already-applied files, making re-runs and future schema changes safe.
 
-- [ ] **Content-Security-Policy header** — `helmet()` is applied without a CSP configuration, leaving the web dashboard unprotected from XSS. Configure `helmet.contentSecurityPolicy()` in `index.ts`.
+- [x] **Content-Security-Policy header** — `helmet.contentSecurityPolicy()` configured in `index.ts` with an explicit directive set covering scripts, styles, frames, and connect sources.
 
-- [ ] **Integration tests with real database** — All 19 test files use mocked dependencies. Real Postgres constraint violations (duplicate keys, FK violations, type errors) are not caught. Add a Docker-based integration test using `testcontainers-node`.
+- [ ] **Integration tests with real database** — All test files mock the database layer. Real PostgreSQL constraint violations (duplicate keys, FK violations) are not exercised. Add Docker-based integration tests using `testcontainers-node` before launch.
 
-- [ ] **Consistent audit logging on admin endpoints** — `server_audit_log` is written in the callback and merchant registration flows but not on merchant approval, suspension, or password reset. CBK compliance requires a complete audit trail.
+- [x] **Consistent audit logging on admin endpoints** — `writeAuditLog` wired to all state-mutating admin routes: merchant approve/reject (`auth.ts`), remote device config push (`devices.ts`), and FX force-refresh (`fx.ts`). Read-only GET routes do not require audit entries. `adminFleetRouter` also now enforces `requireAdmin` on all routes (was missing the guard).
 
 ---
 
