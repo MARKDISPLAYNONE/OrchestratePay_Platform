@@ -116,6 +116,80 @@ ngrok http 3000
 # Copy the https URL → set DARAJA_CALLBACK_BASE_URL in .env
 ```
 
+### Option C — Local Development (step-by-step)
+
+**Step 1 — Install PostgreSQL and Redis**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y postgresql postgresql-contrib redis-server
+sudo systemctl enable postgresql redis-server
+sudo systemctl start postgresql redis-server
+```
+
+**Step 2 — Create the database user and database**
+
+```bash
+sudo -u postgres psql -c "CREATE USER orchestratepay WITH PASSWORD 'devpassword';"
+sudo -u postgres psql -c "CREATE DATABASE orchestratepay OWNER orchestratepay;"
+```
+
+**Terminal 1 — Backend**
+
+```bash
+cd ~/AXLE/OrchestratePay_Platform/Tap2Pay/backend
+cp .env.example .env
+# Edit .env: set DATABASE_URL=postgresql://orchestratepay:devpassword@localhost:5432/orchestratepay
+npm install
+npm run migrate      # creates all DB tables
+npm run dev          # starts Express API on :3000 with hot reload
+```
+
+**Terminal 2 — Web app** (open a new terminal)
+
+```bash
+cd ~/AXLE/OrchestratePay_Platform/Tap2Pay/web
+npm install
+npm run dev          # Next.js on :3001 (proxies /api/* → backend :3000)
+```
+
+> **Port conflict note:** Start the backend first. Both default to :3000, but Next.js will auto-pick :3001 if :3000 is already taken.
+
+**Terminal 3 — M-Pesa callbacks** (only needed for payment testing)
+
+```bash
+ngrok http 3000
+# Copy the https://xxxx.ngrok.io URL
+# Paste it into backend/.env:
+#   DARAJA_CALLBACK_BASE_URL=https://xxxx.ngrok.io
+# Then restart the backend (Ctrl+C → npm run dev)
+```
+
+**Where things run:**
+
+| Service | URL |
+|---|---|
+| Backend API | http://localhost:3000 |
+| Web dashboard | http://localhost:3001 |
+| Health check | http://localhost:3000/health |
+
+**Stopping everything:**
+
+- Backend and web dev servers: `Ctrl+C` in each terminal
+- ngrok: `Ctrl+C` in its terminal
+- PostgreSQL and Redis (stop but keep installed):
+
+```bash
+sudo systemctl stop postgresql redis-server
+```
+
+- PostgreSQL and Redis (disable auto-start on boot):
+
+```bash
+sudo systemctl disable postgresql redis-server
+```
+
+
 ### Android
 
 ```
@@ -172,7 +246,7 @@ Shortcode:  174379
 
 ```bash
 # Required
-DATABASE_URL=postgresql://orchestrate:orchestratedev@localhost:5432/orchestratepay
+DATABASE_URL=postgresql://orchestratepay:devpassword@localhost:5432/orchestratepay
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=<64-char random string — openssl rand -hex 64>
 ADMIN_SECRET=<strong random string>

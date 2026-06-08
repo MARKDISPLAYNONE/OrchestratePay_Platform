@@ -54,25 +54,6 @@ CREATE TABLE IF NOT EXISTS merchants (
 );
 -- Non-destructive migrations for existing databases
 ALTER TABLE merchants ADD COLUMN IF NOT EXISTS kra_pin TEXT;
--- Expand transaction status enum to include STK_SENT (STK push sent, awaiting consumer PIN)
-ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_status_check;
-ALTER TABLE transactions ADD CONSTRAINT transactions_status_check
-  CHECK (status IN ('PENDING','STK_SENT','CONFIRMED','DECLINED','FAILED','EXPIRED'));
--- Expand transaction source enum: all current + new interaction sources
-ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_source_check;
-ALTER TABLE transactions ADD CONSTRAINT transactions_source_check
-  CHECK (source IN (
-    'NFC_TAG',        -- merchant terminal reads consumer NDEF sticker
-    'QR_CODE',        -- consumer scans merchant QR code (consumer-initiated)
-    'ISO_CARD',       -- bank card via IsoDep (PCI MPoC, not yet active)
-    'HCE_PHONE',      -- consumer phone HCE tapped by merchant terminal/SoftPOS
-    'SOFTPOS_MOBILE', -- consumer HCE tapped by merchant SoftPOS phone
-    'CONSUMER_TAG',   -- merchant reads consumer-written identity sticker
-    'CONSUMER_QR',    -- merchant scans consumer wallet QR code
-    'MERCHANT_HCE',   -- consumer wallet reads merchant phone HCE payment request
-    'P2P_NFC',        -- consumer A reads consumer B HCE (P2P NFC)
-    'P2P_QR'          -- consumer A scans consumer B QR code (P2P QR)
-  ));
 
 CREATE INDEX IF NOT EXISTS idx_merchants_email ON merchants(email);
 
@@ -140,6 +121,25 @@ CREATE INDEX IF NOT EXISTS idx_transactions_checkout_request
 -- Fast query for reconciliation job (find stuck PENDING transactions)
 CREATE INDEX IF NOT EXISTS idx_transactions_pending
   ON transactions(created_at) WHERE status = 'PENDING';
+
+-- Expand status and source enums beyond the inline CHECK defaults
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_status_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_status_check
+  CHECK (status IN ('PENDING','STK_SENT','CONFIRMED','DECLINED','FAILED','EXPIRED'));
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_source_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_source_check
+  CHECK (source IN (
+    'NFC_TAG',
+    'QR_CODE',
+    'ISO_CARD',
+    'HCE_PHONE',
+    'SOFTPOS_MOBILE',
+    'CONSUMER_TAG',
+    'CONSUMER_QR',
+    'MERCHANT_HCE',
+    'P2P_NFC',
+    'P2P_QR'
+  ));
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SERVER AUDIT LOG
