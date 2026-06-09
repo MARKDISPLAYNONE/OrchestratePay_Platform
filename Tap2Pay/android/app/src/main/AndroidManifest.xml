@@ -84,6 +84,13 @@
             android:launchMode="singleTop"
             android:parentActivityName=".ui.MerchantDashboardActivity" />
 
+        <!-- QR code scanner — merchant scans consumer wallet QR (Scenario 9) -->
+        <activity
+            android:name=".ui.ConsumerQrScannerActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:parentActivityName=".ui.MerchantDashboardActivity" />
+
         <!-- HCE service for Phase 2 consumer phone-as-card -->
         <service
             android:name=".hce.OrchestrateHceService"

@@ -9,4 +9,23 @@
     <string name="tap_again">Tap again</string>
     <string name="retry">Retry</string>
     <string name="done">Done</string>
+    <!-- Login -->
+    <string name="login_tagline">Merchant Terminal</string>
+    <string name="hint_email">Email address</string>
+    <string name="hint_password">Password</string>
+    <string name="btn_sign_in">Sign In</string>
+    <string name="signing_in">Signing in…</string>
+    <string name="error_fields_required">Email and password are required</string>
+    <string name="error_no_network">No network — check your connection</string>
+    <string name="error_login_failed">Login failed — please try again</string>
+    <!-- Dashboard -->
+    <string name="btn_scan_qr">Scan QR</string>
+    <string name="btn_present_nfc">Present NFC</string>
+    <string name="label_amount_prefix">KSh </string>
+    <!-- Receipt -->
+    <string name="btn_reprint">Print Receipt</string>
+    <string name="btn_reprint_again">Reprint Receipt</string>
+    <!-- QR scanner -->
+    <string name="qr_scan_instruction">Scan customer\'s QR code</string>
+    <string name="error_camera_permission">Camera permission required to scan QR codes</string>
 </resources>

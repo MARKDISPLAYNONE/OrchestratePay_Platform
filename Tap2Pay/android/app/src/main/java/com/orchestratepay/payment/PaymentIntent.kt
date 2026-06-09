@@ -18,7 +18,8 @@ package com.orchestratepay.payment
  * @param consumerPhone Pre-resolved phone number from HCE APDU (HCE_PHONE flow only)
  * @param hceToken      HMAC session token from wallet app — backend verifies before trusting phone
  * @param hceExp        Token expiry epoch millis — backend rejects if past
- * @param consumerId    Consumer UUID from a consumer-written tag (CONSUMER_TAG flow only)
+ * @param consumerId      Consumer UUID from a consumer-written tag (CONSUMER_TAG flow only)
+ * @param consumerQrToken UUID token from consumer wallet QR code (CONSUMER_QR flow only)
  */
 data class PaymentIntent(
     val source: PaymentSource,
@@ -31,7 +32,9 @@ data class PaymentIntent(
     val hceToken: String? = null,
     val hceExp: Long? = null,
     // CONSUMER_TAG fields — only populated when source = CONSUMER_TAG
-    val consumerId: String? = null
+    val consumerId: String? = null,
+    // CONSUMER_QR fields — only populated when source = CONSUMER_QR
+    val consumerQrToken: String? = null
 )
 
 /** How the payment was initiated */
@@ -40,7 +43,8 @@ enum class PaymentSource {
     QR_CODE,      // QR code fallback — for phones without NFC
     ISO_CARD,     // Bank card via IsoDep — requires PCI MPoC cert before enabling
     HCE_PHONE,    // Customer phone acting as NFC card via Host Card Emulation
-    CONSUMER_TAG  // Consumer-written identity sticker (https://orchestratepay.co.ke/c/{id})
+    CONSUMER_TAG, // Consumer-written identity sticker (https://orchestratepay.co.ke/c/{id})
+    CONSUMER_QR   // Consumer wallet QR code (merchant scans UUID token from consumer's screen)
 }
 
 /**

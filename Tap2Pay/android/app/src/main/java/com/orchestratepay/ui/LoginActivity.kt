@@ -3,10 +3,12 @@ package com.orchestratepay.ui
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.orchestratepay.api.ApiResponse
 import com.orchestratepay.api.OrchestrateApiClient
+import com.orchestratepay.databinding.ActivityLoginBinding
 import com.orchestratepay.db.SessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -22,70 +24,78 @@ import kotlinx.coroutines.withContext
  * The backend uses this to enforce single-device sessions — if a merchant's
  * credentials are used on a different device, the backend invalidates the previous
  * session. This is important for MDM (Mobile Device Management) compliance.
- *
- * PRODUCTION NOTE: In production, replace ANDROID_ID with an MDM-provided
- * device certificate for stronger device attestation.
  */
 class LoginActivity : AppCompatActivity() {
 
+    private lateinit var binding: ActivityLoginBinding
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // setContentView(R.layout.activity_login)
+        binding = ActivityLoginBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
         SessionManager.init(this)
 
-        // Skip login screen if already authenticated
         if (SessionManager.isLoggedIn()) {
             navigateToDashboard()
             return
         }
 
-        // binding.loginButton.setOnClickListener { attemptLogin() }
+        binding.btnSignIn.setOnClickListener { attemptLogin() }
     }
 
     private fun attemptLogin() {
-        // val email = binding.emailInput.text.toString().trim()
-        // val password = binding.passwordInput.text.toString()
-        val email = ""      // replace with binding values
-        val password = ""   // replace with binding values
+        val email    = binding.etEmail.text.toString().trim()
+        val password = binding.etPassword.text.toString()
 
         if (email.isBlank() || password.isBlank()) {
-            // showError("Email and password are required")
+            showError(getString(com.orchestratepay.R.string.error_fields_required))
             return
         }
 
-        // ANDROID_ID: unique per app+device combination.
-        // Changes on factory reset, which is fine — merchant re-logs in.
+        // ANDROID_ID: unique per app+device combination; saved so telemetry can read it
         val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        SessionManager.saveDeviceId(deviceId)
 
-        // setLoading(true)
+        setLoading(true)
 
         lifecycleScope.launch {
-            // setLoading(true)
             when (withContext(Dispatchers.IO) {
                 OrchestrateApiClient.current.login(email, password, deviceId)
-                // login() now saves the session internally — no need to call
-                // SessionManager.saveSession() here
             }) {
-                is ApiResponse.Success -> navigateToDashboard()
+                is ApiResponse.Success  -> navigateToDashboard()
                 is ApiResponse.Declined -> {
-                    // setLoading(false)
-                    // showError("Invalid credentials")
+                    setLoading(false)
+                    showError(getString(com.orchestratepay.R.string.error_login_failed))
                 }
                 is ApiResponse.NetworkError -> {
-                    // setLoading(false)
-                    // showError("No network — check your connection")
+                    setLoading(false)
+                    showError(getString(com.orchestratepay.R.string.error_no_network))
                 }
                 else -> {
-                    // setLoading(false)
-                    // showError("Login failed — please try again")
+                    setLoading(false)
+                    showError(getString(com.orchestratepay.R.string.error_login_failed))
                 }
             }
         }
     }
 
+    private fun setLoading(loading: Boolean) {
+        binding.btnSignIn.isEnabled = !loading
+        binding.btnSignIn.text = if (loading)
+            getString(com.orchestratepay.R.string.signing_in)
+        else
+            getString(com.orchestratepay.R.string.btn_sign_in)
+        binding.progressBar.visibility = if (loading) View.VISIBLE else View.GONE
+    }
+
+    private fun showError(message: String) {
+        binding.tvError.text    = message
+        binding.tvError.visibility = View.VISIBLE
+    }
+
     private fun navigateToDashboard() {
         startActivity(Intent(this, MerchantDashboardActivity::class.java))
-        finish()  // removes LoginActivity from back stack — back button won't go back here
+        finish()
     }
 }

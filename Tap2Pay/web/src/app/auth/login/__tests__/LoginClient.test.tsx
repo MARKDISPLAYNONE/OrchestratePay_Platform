@@ -24,7 +24,8 @@ const mockConsumerLogin  = jest.requireMock('@/lib/api').auth.consumerLogin  as 
 const mockSaveToken      = jest.requireMock('@/lib/auth').saveToken            as jest.Mock
 
 function emailInput()    { return document.querySelector('input[type="email"]')    as HTMLInputElement }
-function passwordInput() { return document.querySelector('input[type="password"]') as HTMLInputElement }
+// Use autocomplete attribute to find the password input regardless of whether it's been toggled to type=text
+function passwordInput() { return document.querySelector('input[autocomplete="current-password"]') as HTMLInputElement }
 
 describe('LoginClient', () => {
   beforeEach(() => jest.clearAllMocks())

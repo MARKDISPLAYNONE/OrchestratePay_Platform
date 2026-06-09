@@ -77,8 +77,9 @@ export default function MerchantRegisterPage() {
         <form onSubmit={handleSubmit} className="space-y-4" suppressHydrationWarning>
           {fields.map(f => (
             <div key={f.key}>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{f.label}</label>
+              <label htmlFor={f.key} className="block text-sm font-medium text-gray-700 mb-1">{f.label}</label>
               <input
+                id={f.key}
                 type={f.type ?? 'text'}
                 required={f.required}
                 placeholder={f.placeholder}

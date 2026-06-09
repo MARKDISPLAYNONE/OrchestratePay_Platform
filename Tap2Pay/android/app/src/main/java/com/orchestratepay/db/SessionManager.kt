@@ -20,15 +20,16 @@ object SessionManager {
     private var prefs: android.content.SharedPreferences? = null
     private var sessionId: String? = null
 
-    private const val KEY_TOKEN          = "jwt_token"
-    private const val KEY_MERCHANT_ID    = "merchant_id"
-    private const val KEY_MERCHANT_NAME  = "merchant_name"
-    private const val KEY_EXPIRES_AT     = "expires_at"
+    private const val KEY_TOKEN           = "jwt_token"
+    private const val KEY_MERCHANT_ID     = "merchant_id"
+    private const val KEY_MERCHANT_NAME   = "merchant_name"
+    private const val KEY_EXPIRES_AT      = "expires_at"
     private const val KEY_NFC_SIGNING_KEY = "nfc_signing_key"
-    private const val KEY_KRA_PIN        = "kra_pin"
+    private const val KEY_KRA_PIN         = "kra_pin"
+    private const val KEY_DEVICE_ID       = "device_id"
     // Consumer wallet keys (used by OrchestrateHceService)
-    private const val KEY_CONSUMER_PHONE = "consumer_phone"
-    private const val KEY_CONSUMER_TOKEN = "consumer_hce_token"
+    private const val KEY_CONSUMER_PHONE  = "consumer_phone"
+    private const val KEY_CONSUMER_TOKEN  = "consumer_hce_token"
 
     fun init(context: Context) {
         val masterKey = MasterKey.Builder(context)
@@ -76,6 +77,12 @@ object SessionManager {
     fun getSessionId(): String? = sessionId
     fun getNfcSigningKey(): String? = prefs?.getString(KEY_NFC_SIGNING_KEY, null)
     fun getKraPin(): String? = prefs?.getString(KEY_KRA_PIN, null)
+
+    fun saveDeviceId(deviceId: String) {
+        prefs?.edit()?.putString(KEY_DEVICE_ID, deviceId)?.apply()
+    }
+
+    fun getDeviceId(): String? = prefs?.getString(KEY_DEVICE_ID, null)
 
     fun isLoggedIn(): Boolean = getToken() != null
 

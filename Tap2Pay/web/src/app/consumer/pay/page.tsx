@@ -50,8 +50,9 @@ export default function ConsumerPayPage() {
 
       <form onSubmit={handlePay} className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Merchant ID</label>
+          <label htmlFor="merchantId" className="block text-sm font-medium text-gray-700 mb-1">Merchant ID</label>
           <input
+            id="merchantId"
             type="text" required placeholder="Paste the merchant ID from their QR code"
             value={merchantId} onChange={e => setMerchantId(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -59,10 +60,11 @@ export default function ConsumerPayPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Amount (KSh)</label>
+          <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">Amount (KSh)</label>
           <div className="relative">
             <span className="absolute left-3 top-2 text-sm text-gray-400">KSh</span>
             <input
+              id="amount"
               type="number" required min="1" step="0.01" placeholder="0.00"
               value={amount} onChange={e => setAmount(e.target.value)}
               className="w-full border border-gray-300 rounded-lg pl-12 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"

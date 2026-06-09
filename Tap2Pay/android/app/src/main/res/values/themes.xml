@@ -9,4 +9,14 @@
         <item name="colorOnSecondary">#FFFFFF</item>
         <item name="android:statusBarColor">#0F6E56</item>
     </style>
+
+    <style name="KeypadButton" parent="Widget.MaterialComponents.Button">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">64dp</item>
+        <item name="android:layout_columnWeight">1</item>
+        <item name="android:layout_rowWeight">1</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:layout_margin">4dp</item>
+        <item name="backgroundTint">#424242</item>
+    </style>
 </resources>

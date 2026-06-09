@@ -50,9 +50,9 @@ class SoftPosOrchestrator(
 
     sealed class SoftPosResult {
         data class StkSent(val txnId: String) : SoftPosResult()
-        data class Confirmed(val txnId: String; val mpesaRef: String; val amountCents: Long) : SoftPosResult()
+        data class Confirmed(val txnId: String, val mpesaRef: String, val amountCents: Long) : SoftPosResult()
         data class Declined(val reason: String) : SoftPosResult()
-        data class Failed(val reason: String; val retryable: Boolean = true) : SoftPosResult()
+        data class Failed(val reason: String, val retryable: Boolean = true) : SoftPosResult()
     }
 
     /**

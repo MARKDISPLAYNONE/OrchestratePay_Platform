@@ -3,15 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev":           "next dev",
-    "build":         "next build",
-    "start":         "next start",
-    "lint":          "next lint",
-    "test:unit":     "jest",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test:unit": "jest",
     "test:unit:watch": "jest --watch",
     "test:unit:coverage": "jest --coverage",
-    "test:e2e":      "playwright test",
-    "test:e2e:ui":   "playwright test --ui",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
@@ -39,6 +39,7 @@
     "jest-environment-jsdom": "^29.7.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }

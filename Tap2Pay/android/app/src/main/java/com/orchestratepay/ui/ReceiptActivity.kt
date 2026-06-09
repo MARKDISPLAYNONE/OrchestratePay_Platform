@@ -1,10 +1,13 @@
 package com.orchestratepay.ui
 
 import android.os.Bundle
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.orchestratepay.databinding.ActivityReceiptBinding
 import com.orchestratepay.db.ReceiptCache
 import com.orchestratepay.db.ReceiptRecord
+import com.orchestratepay.printer.PrintResult
 import com.orchestratepay.printer.SunmiPrinterManager
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -16,43 +19,36 @@ import java.util.*
  * ReceiptActivity — digital receipt screen with offline-safe reprint support.
  *
  * Two entry modes:
- *
  *   1. IMMEDIATE (post-payment): all Intent extras populated by MerchantDashboardActivity.
- *      Saves the receipt to Room on first display, then shows it. The "Reprint"
- *      button will work even if the network drops before the merchant taps it.
- *
- *   2. REPRINT (from history): only "txn_id" is set. Loads the cached ReceiptRecord
- *      from Room — no network call, no server round-trip. Fully offline.
- *
- * The physical print goes to SunmiPrinterManager in a fire-and-forget coroutine
- * so paper feeding never blocks the UI.
+ *      Saves the receipt to Room on first display, then shows it.
+ *   2. REPRINT (from history): only "txn_id" is set. Loads from Room cache — no network.
  */
 class ReceiptActivity : AppCompatActivity() {
 
+    private lateinit var binding: ActivityReceiptBinding
     private val printer by lazy { SunmiPrinterManager(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // setContentView(R.layout.activity_receipt)
+        binding = ActivityReceiptBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        val txnId    = intent.getStringExtra("txn_id")    ?: return
+        val txnId    = intent.getStringExtra("txn_id") ?: run { finish(); return }
         val mpesaRef = intent.getStringExtra("mpesa_ref")
 
         if (mpesaRef != null) {
-            // Immediate path — full data from the just-confirmed payment
             val record = ReceiptRecord(
                 txnId          = txnId,
                 mpesaRef       = mpesaRef,
                 amountCents    = intent.getLongExtra("amount_cents", 0L),
-                merchantName   = intent.getStringExtra("merchant_name")  ?: "",
+                merchantName   = intent.getStringExtra("merchant_name") ?: "",
                 consumerPhone  = intent.getStringExtra("consumer_phone") ?: "",
                 kraPin         = intent.getStringExtra("kra_pin"),
                 confirmedAtIso = DateTimeFormatter.ISO_INSTANT.format(Instant.now())
             )
-            ReceiptCache.save(record)   // fire-and-forget — never blocks the UI
+            ReceiptCache.save(record)
             displayReceipt(record, isFirstPrint = true)
         } else {
-            // Reprint path — load from Room (works offline, no network needed)
             lifecycleScope.launch {
                 val record = ReceiptCache.get(txnId)
                 if (record != null) displayReceipt(record, isFirstPrint = false)
@@ -65,45 +61,51 @@ class ReceiptActivity : AppCompatActivity() {
         val amountDisplay = "KSh ${"%.2f".format(record.amountCents / 100.0)}"
         val dateDisplay   = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date())
 
-        // ── Bind to views (uncomment when layout is wired) ───────────────────
-        // binding.mpesaRefText.text     = record.mpesaRef
-        // binding.amountText.text       = amountDisplay
-        // binding.merchantNameText.text = record.merchantName
-        // binding.phoneText.text        = record.consumerPhone
-        // binding.dateText.text         = dateDisplay
-        // binding.kraLine.visibility    = if (record.kraPin != null) View.VISIBLE else View.GONE
-        // binding.kraText.text          = "KRA PIN: ${record.kraPin}"
+        binding.tvMerchantName.text = record.merchantName
+        binding.tvAmount.text       = amountDisplay
+        binding.tvMpesaRef.text     = record.mpesaRef
+        binding.tvDate.text         = dateDisplay
+        binding.tvPhone.text        = "Phone: ${record.consumerPhone}"
 
-        // ── Reprint button — works offline, reads from local cache ────────────
-        // binding.reprintButton.text = if (isFirstPrint) "Print Receipt" else "Reprint Receipt"
-        // binding.reprintButton.setOnClickListener {
-        //     lifecycleScope.launch {
-        //         printer.printReceipt(
-        //             txnId        = record.txnId,
-        //             mpesaRef     = record.mpesaRef,
-        //             amountCents  = record.amountCents,
-        //             merchantName = record.merchantName,
-        //             consumerPhone = record.consumerPhone,
-        //             kraPin       = record.kraPin
-        //         )
-        //         ReceiptCache.markPrinted(record.txnId)
-        //     }
-        // }
+        if (record.kraPin != null) {
+            binding.tvKra.text       = "KRA PIN: ${record.kraPin}"
+            binding.tvKra.visibility = View.VISIBLE
+        }
 
-        // ── Auto-print on first display ───────────────────────────────────────
-        if (isFirstPrint) {
+        binding.btnReprint.text = if (isFirstPrint)
+            getString(com.orchestratepay.R.string.btn_reprint)
+        else
+            getString(com.orchestratepay.R.string.btn_reprint_again)
+
+        binding.btnReprint.setOnClickListener {
             lifecycleScope.launch {
-                // fire-and-forget — don't await, success screen is shown regardless
-                // printer.printReceipt(record.txnId, record.mpesaRef, record.amountCents,
-                //                      record.merchantName, record.consumerPhone, record.kraPin)
+                // Convert ReceiptRecord to PaymentResult.Success for the printer
+                val paymentResult = com.orchestratepay.payment.PaymentResult.Success(
+                    txnId         = record.txnId,
+                    mpesaRef      = record.mpesaRef,
+                    amountCents   = record.amountCents,
+                    merchantName  = record.merchantName,
+                    consumerPhone = record.consumerPhone
+                )
+                printer.printReceipt(paymentResult, record.kraPin)
                 ReceiptCache.markPrinted(record.txnId)
             }
         }
 
-        android.util.Log.d(
-            "ReceiptActivity",
-            "txnId=${record.txnId} ref=${record.mpesaRef} amount=$amountDisplay " +
-            "firstPrint=$isFirstPrint previousPrint=${record.printedAt}"
-        )
+        binding.btnDone.setOnClickListener { finish() }
+
+        if (isFirstPrint) {
+            lifecycleScope.launch {
+                val paymentResult = com.orchestratepay.payment.PaymentResult.Success(
+                    txnId         = record.txnId,
+                    mpesaRef      = record.mpesaRef,
+                    amountCents   = record.amountCents,
+                    merchantName  = record.merchantName,
+                    consumerPhone = record.consumerPhone
+                )
+                printer.printReceipt(paymentResult, record.kraPin)
+                ReceiptCache.markPrinted(record.txnId)
+            }
+        }
     }
 }

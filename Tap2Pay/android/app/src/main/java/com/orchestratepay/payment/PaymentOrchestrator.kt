@@ -94,6 +94,33 @@ class PaymentOrchestrator(
         }
     }
 
+    /**
+     * Entry point for Scenario 9 — merchant scans consumer wallet QR code.
+     *
+     * The consumer's wallet generates a single-use UUID token (90-second TTL) via
+     * POST /consumers/qr-token. The merchant scans this QR with their camera and
+     * calls this method. The token is forwarded to the backend which looks up the
+     * consumer and fires the STK Push.
+     *
+     * Internally builds a PaymentIntent with source=CONSUMER_QR and delegates to
+     * the same retry/polling pipeline used by NFC flows.
+     */
+    fun processConsumerQr(
+        merchantId:      String,
+        amountCents:     Long,
+        consumerQrToken: String,
+        onStkSent:       (() -> Unit)? = null,
+        onResult:        (PaymentResult) -> Unit
+    ) {
+        val intent = PaymentIntent(
+            source          = PaymentSource.CONSUMER_QR,
+            merchantId      = merchantId,
+            timestamp       = System.currentTimeMillis(),
+            consumerQrToken = consumerQrToken
+        )
+        process(intent, amountCents, onStkSent, onResult)
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // Validation
     // ─────────────────────────────────────────────────────────────────
@@ -139,19 +166,21 @@ class PaymentOrchestrator(
         )
 
         val request = TransactionRequest(
-            merchantId     = intent.merchantId,
-            amountCents    = amountCents,
-            source         = intent.source.name,
-            tagId          = intent.tagId,
-            nfcUid         = intent.rawUid,
-            idempotencyKey = idempotencyKey,
-            timestamp      = intent.timestamp,
+            merchantId       = intent.merchantId,
+            amountCents      = amountCents,
+            source           = intent.source.name,
+            tagId            = intent.tagId,
+            nfcUid           = intent.rawUid,
+            idempotencyKey   = idempotencyKey,
+            timestamp        = intent.timestamp,
             // HCE_PHONE fields — only set when the customer used their phone to tap
-            consumerPhone  = intent.consumerPhone,
-            hceToken       = intent.hceToken,
-            hceExp         = intent.hceExp,
+            consumerPhone    = intent.consumerPhone,
+            hceToken         = intent.hceToken,
+            hceExp           = intent.hceExp,
             // CONSUMER_TAG fields — only set when the merchant read a consumer-written sticker
-            consumerTagId  = intent.consumerId
+            consumerTagId    = intent.consumerId,
+            // CONSUMER_QR fields — only set when the merchant scanned the consumer's QR code
+            consumerQrToken  = intent.consumerQrToken
         )
 
         return when (val response = apiClient.initiatePayment(request)) {

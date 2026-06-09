@@ -72,6 +72,16 @@ interface OrchestrateService {
      */
     @GET("merchants/me/z-report")
     suspend fun getZReport(@Query("date") date: String? = null): Response<ZReportResponse>
+
+    /**
+     * Issue a single-use HCE token for merchant phone-as-card mode (Scenario 5).
+     * Returns a 60-second UUID token; consumer wallet reads it via NFC APDU and
+     * posts to /consumers/pay/{merchantId} to trigger the STK Push.
+     */
+    @POST("transactions/merchant-hce-token")
+    suspend fun issueMerchantHceToken(
+        @Body request: MerchantHceTokenRequest
+    ): Response<MerchantHceTokenResponse>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -96,7 +106,7 @@ data class AuthResponse(
 data class TransactionRequest(
     @SerializedName("merchantId") val merchantId: String,
     @SerializedName("amountCents") val amountCents: Long,
-    @SerializedName("source") val source: String,          // "NFC_TAG", "QR_CODE", "HCE_PHONE"
+    @SerializedName("source") val source: String,          // "NFC_TAG", "QR_CODE", "HCE_PHONE", "CONSUMER_QR"
     @SerializedName("tagId") val tagId: String?,
     @SerializedName("nfcUid") val nfcUid: String?,         // raw tag UID for audit
     @SerializedName("idempotencyKey") val idempotencyKey: String,
@@ -106,7 +116,9 @@ data class TransactionRequest(
     @SerializedName("hceToken") val hceToken: String? = null,
     @SerializedName("hceExp") val hceExp: Long? = null,
     // CONSUMER_TAG only — consumerId from https://orchestratepay.co.ke/c/{id}
-    @SerializedName("consumerTagId") val consumerTagId: String? = null
+    @SerializedName("consumerTagId") val consumerTagId: String? = null,
+    // CONSUMER_QR only — UUID token from consumer wallet QR (90-second TTL)
+    @SerializedName("consumerQrToken") val consumerQrToken: String? = null
 )
 
 data class TransactionResponse(
@@ -180,6 +192,17 @@ data class LoyaltyBalanceResponse(
     @SerializedName("stamps_for_reward")     val stampsForReward:     Int?,
     @SerializedName("reward_description")    val rewardDescription:   String?,
     @SerializedName("lifetime_spent_cents")  val lifetimeSpentCents:  Long
+)
+
+data class MerchantHceTokenRequest(
+    @SerializedName("amountCents") val amountCents: Long
+)
+
+data class MerchantHceTokenResponse(
+    @SerializedName("token")        val token:        String,
+    @SerializedName("merchantName") val merchantName: String,
+    @SerializedName("amountCents")  val amountCents:  Long,
+    @SerializedName("expiresAt")    val expiresAt:    Long
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -362,6 +385,21 @@ class OrchestrateApiClient private constructor(baseUrl: String) {
         } catch (e: Exception) {
             null
         }
+    }
+
+    /**
+     * Issues a single-use 60-second HCE token for merchant phone-as-card mode.
+     *
+     * Throws IOException on network failure so the caller's runCatching block
+     * can show an appropriate error message. Never silently returns null — the
+     * merchant must know if HCE activation failed so they can fall back to QR.
+     */
+    suspend fun issueMerchantHceToken(amountCents: Long): MerchantHceTokenResponse {
+        val response = service.issueMerchantHceToken(MerchantHceTokenRequest(amountCents))
+        return response.body()
+            ?: throw java.io.IOException(
+                "HCE token request failed — HTTP ${response.code()}"
+            )
     }
 
     // ─── Response mapping ─────────────────────────────────────────────

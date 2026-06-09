@@ -2,7 +2,7 @@ package com.orchestratepay.offline
 
 import android.content.Context
 import android.util.Log
-import com.orchestratepay.api.OrchestaApiClient
+import com.orchestratepay.api.OrchestrateApiClient
 import com.orchestratepay.api.TransactionRequest
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -64,7 +64,7 @@ class QueueSyncService(private val context: Context) {
                     idempotencyKey = item.idempotencyKey,
                     timestamp      = item.queuedAt,
                 )
-                val response = OrchestaApiClient.current.submitTransaction(request)
+                val response = OrchestrateApiClient.current.submitTransaction(request)
 
                 if (response.isSuccessful || response.code() == 409) {
                     // 409 = already processed (idempotent success)
