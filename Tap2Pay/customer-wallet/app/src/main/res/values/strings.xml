@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">OrchestratePay Wallet</string>
-    <string name="hce_service_description">OrchestratePay tap-to-pay</string>
-    <string name="hce_aid_description">OrchestratePay payment session</string>
-</resources>

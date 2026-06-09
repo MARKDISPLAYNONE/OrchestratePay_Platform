@@ -67,7 +67,7 @@ OrchestratePay_Platform/
     │   │   ├── realtime/       WebSocket server (ws-server.ts)
     │   │   ├── util/           fx, nfc-signing, hce-token, circuit-breaker, fraud, vat
     │   │   └── db/             PostgreSQL pool, Redis, migrations (14+ tables)
-    │   ├── src/__tests__/      34 test suites · 717 assertions · all passing
+    │   ├── src/__tests__/      71 test suites · 1,291 assertions · all passing
     │   └── Dockerfile          Multi-stage Node 20 Alpine, non-root user
     ├── web/                ← Next.js 14 web app
     │   └── src/app/
@@ -203,7 +203,7 @@ Open Tap2Pay/android/ in Android Studio (Electric Eel or later)
 
 ```bash
 cd Tap2Pay/backend
-npm test                  # 34 suites, 717 assertions (~34 seconds)
+npm test                  # 71 suites, 1,291 assertions (~12 seconds)
 npm run test:coverage     # with branch/line coverage report
 npm run lint              # ESLint + TypeScript check
 ```
@@ -264,13 +264,62 @@ SMS_ENABLED=false                   # Africa's Talking SMS
 LOG_LEVEL=info
 ```
 
+## Known Production Gaps (P0)
+
+These issues **will cause a failed deployment** if not fixed before applying the K8s manifests. They are intentionally left as manual action items — fixing them requires your specific credentials and cluster details.
+
+### 1 — Env var name mismatch: `DARAJA_CALLBACK_URL` vs `DARAJA_CALLBACK_BASE_URL`
+
+`infra/k8s/backend/deployment.yaml` injects the Daraja callback URL as:
+```yaml
+- name: DARAJA_CALLBACK_URL
+  valueFrom:
+    configMapKeyRef:
+      name: orchestratepay-config
+      key: daraja-callback-url
+```
+
+But `src/index.ts` startup check requires `DARAJA_CALLBACK_BASE_URL`:
+```typescript
+const required = [..., 'DARAJA_CALLBACK_BASE_URL', ...]
+```
+
+**Fix:** Rename the env var in `deployment.yaml` from `DARAJA_CALLBACK_URL` to `DARAJA_CALLBACK_BASE_URL`.
+
+### 2 — Missing env vars in K8s deployment
+
+`ADMIN_SECRET` and `NFC_SIGNING_SECRET` are required at startup but are absent from `infra/k8s/backend/deployment.yaml` and `infra/k8s/secrets.template.yaml`.
+
+**Fix:** Add both to `secrets.template.yaml`:
+```yaml
+data:
+  admin-secret: <base64-encoded value>
+  nfc-signing-secret: <base64-encoded value>
+```
+
+And add to `deployment.yaml` container env:
+```yaml
+- name: ADMIN_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: orchestratepay-secrets
+      key: admin-secret
+- name: NFC_SIGNING_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: orchestratepay-secrets
+      key: nfc-signing-secret
+```
+
+---
+
 ## Pre-launch Checklist
 
 Critical items before production:
 
 - [x] Add distributed Redlock to reconciliation job — implemented in `util/distributed-lock.ts`, used by reconciliation job
 - [x] Set up CI/CD pipeline — `.github/workflows/ci.yml` runs tests, lint, and Docker build on every PR
-- [ ] Add Kubernetes/Helm manifests for production deployment — deferred, in progress
+- [x] Add Kubernetes/Helm manifests for production deployment — manifests in `infra/k8s/`; see P0 gaps above for two required fixes before first deploy
 - [x] Replace placeholder TLS certificate pins in `network_security_config.xml` — pins to ISRG Root X1/X2 (Let's Encrypt CA), survives 90-day cert renewals
 - [x] Add JWT refresh token rotation — `merchant_refresh_tokens` table + `issueMerchantRefreshToken` in `auth.ts`
 - [x] Integrate Sentry — `@sentry/node` wired in `util/sentry.ts`, initialised at startup

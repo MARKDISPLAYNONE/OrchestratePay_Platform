@@ -22,9 +22,6 @@ spec:
       labels:
         app: orchestratepay-backend
         tier: backend
-      annotations:
-        # Trigger a rollout when the secret changes
-        checksum/secret: "{{ include (print $.Template.BasePath \"/secret.yaml\") . | sha256sum }}"
     spec:
       terminationGracePeriodSeconds: 30
       securityContext:
@@ -90,6 +87,21 @@ spec:
                   name: orchestratepay-secrets
                   key: sentry-dsn
                   optional: true
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestratepay-config
+                  key: log-level
+            - name: DARAJA_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestratepay-config
+                  key: daraja-env
+            - name: ETIMS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestratepay-config
+                  key: etims-enabled
           resources:
             requests:
               cpu: 100m
