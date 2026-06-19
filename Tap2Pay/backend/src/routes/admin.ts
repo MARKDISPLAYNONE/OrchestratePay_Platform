@@ -106,6 +106,14 @@ router.get('/stats', async (_req: Request, res: Response) => {
       ORDER BY 1 ASC
     `)
 
+    // ── Platform totals ───────────────────────────────────────────────────────
+    const merchantCount = await db.query(`
+      SELECT COUNT(*) AS count FROM merchants WHERE approval_status = 'APPROVED'
+    `)
+    const consumerCount = await db.query(`
+      SELECT COUNT(*) AS count FROM consumers WHERE active = true
+    `)
+
     // ── Redis health ──────────────────────────────────────────────────────────
     let redisOk = false
     try {
@@ -143,6 +151,8 @@ router.get('/stats', async (_req: Request, res: Response) => {
         total:     parseInt(r.total),
         confirmed: parseInt(r.confirmed)
       })),
+      merchants:  { total: parseInt(merchantCount.rows[0].count) || 0 },
+      consumers:  { total: parseInt(consumerCount.rows[0].count) || 0 },
       infrastructure: {
         redis:          redisOk ? 'ok' : 'down',
         darajaCircuit:  getDarajaCircuitStatus()
@@ -189,6 +199,52 @@ router.get('/circuit', (_req: Request, res: Response) => {
     daraja: getDarajaCircuitStatus(),
     description: 'CLOSED = healthy, OPEN = Daraja unreachable, HALF_OPEN = probing after cooldown'
   })
+})
+
+// ─── GET /api/v1/admin/merchants ──────────────────────────────────────────────
+
+router.get('/merchants', async (_req: Request, res: Response) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT
+        m.id, m.name, m.email, m.phone,
+        m.business_reg_number, m.mpesa_shortcode,
+        m.created_at, m.approval_status, m.active,
+        EXISTS(
+          SELECT 1 FROM devices d
+          WHERE d.merchant_id = m.id
+            AND d.last_seen_at > NOW() - INTERVAL '5 minutes'
+        ) AS live
+      FROM merchants m
+      WHERE m.approval_status <> 'PENDING_REVIEW'
+      ORDER BY m.name ASC
+    `)
+    res.json({ merchants: rows })
+  } catch (err: any) {
+    logger.error('Admin merchants query failed', { error: err.message })
+    res.status(500).json({ error: 'Query failed' })
+  }
+})
+
+// ─── GET /api/v1/admin/consumers ──────────────────────────────────────────────
+
+router.get('/consumers', async (_req: Request, res: Response) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT
+        c.id, c.phone, c.email, c.display_name, c.active, c.created_at,
+        COUNT(t.id)::INT AS transaction_count
+      FROM consumers c
+      LEFT JOIN transactions t ON t.consumer_id = c.id
+      GROUP BY c.id
+      ORDER BY c.created_at DESC
+      LIMIT 500
+    `)
+    res.json({ consumers: rows })
+  } catch (err: any) {
+    logger.error('Admin consumers query failed', { error: err.message })
+    res.status(500).json({ error: 'Query failed' })
+  }
 })
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

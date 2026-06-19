@@ -330,6 +330,81 @@ Critical items before production:
 
 See `Tap2Pay/README.md` for the full pre-launch checklist with implementation details.
 
+##Here's the complete picture — organized by what matters most:
+
+What's Missing: Full Gap Analysis
+🔴 Blocking — Breaks Core Promises
+1. Merchant Settlement (Money Never Reaches Merchants)
+Zero settlement infrastructure. Merchants process payments but there's no mechanism to move float to their bank accounts. This is the most critical gap — a payment platform that doesn't pay out is just an expensive ledger. Need:
+
+settlement_accounts table (merchant IBAN/bank details)
+A nightly settlement job (T+0 or T+1) using Daraja B2B or bank API
+Settlement history endpoint + web page
+Minimum payout thresholds and hold periods
+2. B2C Refunds Don't Actually Work
+initiateB2cPayout() throws unconditionally. Refunds are accepted via the API and immediately fail silently. Real B2C credentials + the Daraja B2C endpoint call need to be implemented.
+
+3. Merchant Self-Service Onboarding + KYC
+Registration is admin-only. No self-service signup, no document upload (national ID, business registration, KRA certificate), no automated approval flow. Every merchant requires manual admin intervention.
+
+🟠 High Business Impact — Missing Revenue & Retention
+4. Card Payment Rails (Visa/Mastercard/PesaLink)
+payment-rails.ts defines 5 non-M-Pesa rails — all return 501 Not Implemented. Kenya has growing card usage. Integrating a PSP (e.g., DPO Group or Cellulant) for card acquiring would unlock a major merchant segment.
+
+5. Airtel Money + T-Kash
+STK Push is M-Pesa only. ~30% of Kenyan mobile subscribers are on Airtel or Telkom. Airtel Money API + T-Kash (Telkom) integration would give merchants full market coverage.
+
+6. USSD Payment Initiation Fallback
+Africa's Talking is wired only for OTP/alerts. For feature phones (still significant in rural Kenya), a USSD-initiated payment (*334*amount*merchantId#) would dramatically expand the addressable merchant base.
+
+7. Consumer Credit / BNPL
+Zero lending logic. This is the highest-margin fintech product. Integrating with a credit bureau (e.g., Metropol, TransUnion Kenya) for instant credit scoring + offering buy-now-pay-later at checkout is a major revenue unlock and retention driver.
+
+8. Merchant Analytics Dashboard
+The admin web has basic stats. Merchants need their own analytics: revenue trends, peak hours, top customers, average basket size, loyalty ROI, chargeback rates. This is table-stakes for merchant retention.
+
+🟡 Competitive Edge — What Separates Good from Best
+9. OpenAPI / Developer SDK
+No Swagger docs, no client SDK, no sandbox environment. Every serious payment platform (Stripe, Flutterwave, Paystack) has this. Without it, B2B integrations require the merchant to read raw route files. A Swagger UI + a Node.js/Python SDK would unlock the developer-merchant segment entirely.
+
+10. Per-Merchant Rate Limiting
+Currently global (100 req/min for all merchants combined). One misbehaving merchant can degrade service for others. Redis-backed per-merchant rate limiting (sliding window keyed on merchantId) is essential for multi-tenant fairness.
+
+11. Instant Settlement (T+0)
+Most Kenyan processors are T+1 or T+2. Offering same-day settlement as a premium feature (small fee) is a strong differentiator that wins price-sensitive merchants even if the transaction fee is slightly higher.
+
+12. Merchant Financing (Revenue-Based)
+The platform has 100% visibility into each merchant's transaction history. That data is a credit score. Offering working capital advances (e.g., "KSh 50,000 advance, repaid at 5% of daily receipts") is how Square, Stripe, and M-Kopa built massive secondary revenue streams.
+
+13. Terminal Lifecycle: Repair, Swap, Insurance
+The Android fleet has MDM hooks but no terminal insurance or swap program. Merchants whose Sunmi P2 Pro breaks are dead in the water. A hardware-as-a-service subscription (device swap SLA + insurance) is a moat — hardware is sticky.
+
+🔵 Platform-Level (Makes This a Super-App)
+14. Cross-Border Payments (EAC)
+The FX module handles rates but there's no cross-border send. Tanzania (TIGO Pesa, Airtel TZ), Uganda (MTN MoMo), Rwanda (MTN Rwanda) are all reachable via mobile money APIs. Position as the East African Commerce rail, not just a Kenyan one.
+
+15. Consumer Super-Wallet
+The consumer app is payment-only. Adding bill payments (KPLC electricity, Nairobi Water, DSTV), airtime top-up, and peer-to-peer transfers (not just merchant pay) turns it into a daily-use app — which is the only way to win consumer loyalty in a mobile money market.
+
+16. Marketplace / Platform Payments
+Split payments exist but there's no marketplace model: a platform merchant who takes a cut, disburses to multiple sub-merchants, and manages the escrow period. This unlocks e-commerce, gig economy, and delivery platforms as customers.
+
+17. Embedded Finance / White-Label API
+The platform's infrastructure (NFC, HCE, STK Push, ledger) could be offered as white-label to SACCOs, MFIs, and smaller banks who can't afford to build this themselves. That's the B2B2C model that Interswitch and Cellulant use to scale.
+
+Quick Priority Stack-Rank
+Priority	Feature	Why
+1	Settlement job	Merchants can't use a platform that doesn't pay them out
+2	Real B2C refunds	Consumer trust depends on this
+3	Merchant self-onboarding + KYC	Can't scale with admin-only registration
+4	Airtel Money + T-Kash	30% market coverage gap
+5	OpenAPI + SDK	Unlocks B2B integrations without hand-holding
+6	Merchant analytics dashboard	Retention — merchants stay where they can see their numbers
+7	Per-merchant rate limiting	Multi-tenancy correctness
+8	BNPL / consumer credit	Highest-margin product available
+9	Card rails (DPO/Cellulant)	Corporate and tourist segment
+10	Cross-border EAC	Regional moat
+The platform is already ahead of most Kenyan competitors on NFC depth, offline resilience, and real-time WebSocket confirmations. Settlement, refunds, and self-onboarding are the three things that would block a CBK production license. Everything else is differentiation
 ## License
 
 Proprietary — OrchestratePay Ltd. All rights reserved.

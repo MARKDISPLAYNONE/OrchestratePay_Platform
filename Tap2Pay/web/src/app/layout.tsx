@@ -30,7 +30,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="bg-gray-50 text-gray-900 antialiased font-sans" suppressHydrationWarning>
         {children}
         <Script id="sw-register" strategy="afterInteractive">{`

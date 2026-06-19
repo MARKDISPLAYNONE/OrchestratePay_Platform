@@ -332,4 +332,44 @@ describe('runGlPostingJob — token refresh (expired token)', () => {
 
     expect(mockPostToQuickBooks).toHaveBeenCalled()
   })
+
+  it('line 126: db.query catch swallows token UPDATE failure after successful refresh', async () => {
+    const expiredAt = new Date(Date.now() - 1000).toISOString()  // already expired
+    mockQuery
+      .mockResolvedValueOnce({ rows: [makePendingRow({ token_expires_at: expiredAt })] })
+      .mockResolvedValueOnce({ rows: [] })                              // UPDATE attempt_count
+      .mockRejectedValueOnce(new Error('UPDATE accounting_integrations failed'))  // line 126 catch
+      .mockResolvedValue({ rows: [] })                                  // remaining (POSTED update, last_sync_at)
+    mockRefreshQBToken.mockResolvedValue({
+      accessToken:  'new-at',
+      refreshToken: 'new-rt',
+      expiresAt:    new Date(Date.now() + 3600 * 1000),
+    })
+    mockPostToQuickBooks.mockResolvedValue({ success: true, externalId: 'qb-catch-126' })
+
+    await runGlPostingJob()
+
+    const tokenUpdate = mockQuery.mock.calls.find((c: any[]) =>
+      String(c[0]).includes('accounting_integrations') && String(c[0]).includes('access_token')
+    )
+    expect(tokenUpdate).toBeTruthy()
+    expect(mockPostToQuickBooks).toHaveBeenCalled()
+  })
+
+  it('line 163: db.query catch swallows last_sync_at UPDATE failure after successful posting', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [makePendingRow()] })  // SELECT pending
+      .mockResolvedValueOnce({ rows: [] })                   // UPDATE attempt_count
+      .mockResolvedValueOnce({ rows: [] })                   // UPDATE gl_postings POSTED
+      .mockRejectedValueOnce(new Error('last_sync_at UPDATE failed'))  // line 163 catch
+    mockPostToQuickBooks.mockResolvedValue({ success: true, externalId: 'qb-catch-163' })
+
+    await runGlPostingJob()
+
+    const syncUpdate = mockQuery.mock.calls.find((c: any[]) =>
+      String(c[0]).includes('last_sync_at')
+    )
+    expect(syncUpdate).toBeTruthy()
+    expect(mockPostToQuickBooks).toHaveBeenCalled()
+  })
 })

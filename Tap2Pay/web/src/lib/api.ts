@@ -28,11 +28,15 @@ function getAdminSecret(): string | null {
 }
 
 export function saveAdminSecret(secret: string) {
-  if (typeof window !== 'undefined') sessionStorage.setItem('admin_secret', secret)
+  if (typeof window === 'undefined') return
+  sessionStorage.setItem('admin_secret', secret)
+  document.cookie = 'admin_auth=1; path=/; SameSite=Strict'
 }
 
 export function clearAdminSecret() {
-  if (typeof window !== 'undefined') sessionStorage.removeItem('admin_secret')
+  if (typeof window === 'undefined') return
+  sessionStorage.removeItem('admin_secret')
+  document.cookie = 'admin_auth=; path=/; max-age=0; SameSite=Strict'
 }
 
 export function hasAdminSecret(): boolean {
@@ -166,9 +170,9 @@ export const fx = {
 // ─── Devices / Fleet ──────────────────────────────────────────────────────────
 
 export const devices = {
-  getFleet:   () => request<any>('GET', '/api/v1/admin/fleet'),
-  getDevice:  (deviceId: string) => request<any>('GET', `/api/v1/admin/fleet/${deviceId}`),
-  getAlerts:  () => request<any>('GET', '/api/v1/admin/fleet/alerts?unresolved'),
+  getFleet:   () => request<any>('GET', '/api/v1/devices'),
+  getDevice:  (deviceId: string) => request<any>('GET', `/api/v1/admin/fleet/${deviceId}`, undefined, { auth: false, adminAuth: true }),
+  getAlerts:  () => request<any>('GET', '/api/v1/admin/fleet/alerts?unresolved', undefined, { auth: false, adminAuth: true }),
 }
 
 // ─── Accounting ───────────────────────────────────────────────────────────────
@@ -194,6 +198,14 @@ export const loyalty = {
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
+export function verifyAdminSecret(secret: string) {
+  return request<any>('GET', '/api/v1/admin/stats', undefined, {
+    auth: false,
+    adminAuth: false,
+    extraHeaders: { 'X-Admin-Secret': secret },
+  })
+}
+
 export const admin = {
   getStats: () =>
     request<any>('GET', '/api/v1/admin/stats', undefined, { auth: false, adminAuth: true }),
@@ -203,6 +215,12 @@ export const admin = {
 
   approveMerchant: (merchantId: string, action: string, notes?: string) =>
     request<any>('POST', `/api/v1/auth/admin/approve/${merchantId}`, { action, notes }, { auth: false, adminAuth: true }),
+
+  getAllMerchants: () =>
+    request<any>('GET', '/api/v1/admin/merchants', undefined, { auth: false, adminAuth: true }),
+
+  getConsumers: () =>
+    request<any>('GET', '/api/v1/admin/consumers', undefined, { auth: false, adminAuth: true }),
 
   getFleet: () =>
     request<any>('GET', '/api/v1/admin/fleet', undefined, { auth: false, adminAuth: true }),

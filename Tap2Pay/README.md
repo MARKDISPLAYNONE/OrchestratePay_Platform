@@ -627,56 +627,136 @@ server {
 
 ## Testing
 
-```bash
-cd backend
+Run all three layers from the `Tap2Pay/` root (requires the Gradle wrapper to be generated once for Android — see `android/README.md`):
 
-# Run all tests
+```bash
+# From Tap2Pay/
+
+# Run backend + web unit tests
 npm test
 
-# Watch mode
-npm run test:watch
-
-# Coverage report
+# Run backend + web with coverage
 npm run test:coverage
+
+# Run backend only
+npm run test:backend
+
+# Run web unit tests only
+npm run test:web
+
+# Run web E2E tests (Playwright)
+npm run test:e2e
+
+# Run Android unit tests (requires ./gradlew wrapper — see android/README.md)
+npm run test:android
 ```
 
-Coverage thresholds (enforced by Jest): 60% branches · 70% functions · 70% lines
+---
 
-Test suite (34 files, 717 assertions, ~34 seconds):
+### Backend — 85 suites · 1,836 tests
 
-| File | What it covers |
+```bash
+cd backend
+npm test                    # run all
+npm run test:watch          # re-run on save
+npm run test:coverage       # + HTML coverage report
+npx jest src/__tests__/auth.test.ts          # single file
+npx jest --testNamePattern "circuit breaker" # by name
+```
+
+Coverage thresholds (enforced in CI): 60% branches · 70% functions · 70% lines
+
+| Suite group | Files | What's covered |
+|---|---|---|
+| Core payment | auth, transactions, idempotency, mpesa-callback, callback-edge-cases, concurrency | Login, STK Push, deduplication, callback handling |
+| Security | safaricom-ip, nfc-security, hce-token, device-binding, middleware-auth-extra, middleware-validate, security-injection | IP allowlist, HMAC, constant-time verify, Joi validation |
+| Background jobs | reconciliation, jobs-gl-posting, jobs-subscription-billing | Stuck transaction recovery, GL drain, billing cron |
+| Routes | routes-attestation, routes-webhooks, routes-api-keys, payment-links, split-payments, p2p-transactions | Play Integrity, webhook delivery, API keys, links, splits |
+| Integrations | daraja, integrations-etims, integrations-quickbooks, integrations-xero, integrations-sage, integrations-wave, integrations-africas-talking, fcm | All external APIs |
+| Analytics & reports | z-report, vat, latency-tracker, fx | Z-report, VAT, P95 histogram, FX rates |
+| Infrastructure | circuit-breaker, realtime-ws, immutable-ledger, compliance, cbk-compliance, fraud-scoring | State machines, WebSocket, ledger integrity, audit |
+
+---
+
+### Web — unit tests (Jest + RTL) + E2E (Playwright)
+
+```bash
+cd web
+npm run test:unit              # run all unit tests
+npm run test:unit:watch        # re-run on save
+npm run test:unit:coverage     # + HTML coverage report
+npm run test:e2e               # Playwright headless
+npm run test:e2e:headed        # watch browser window
+npm run test:e2e:ui            # Playwright interactive UI
+npx playwright test e2e/merchant/scan.spec.ts   # single E2E spec
+```
+
+| Suite | Tests | What's covered |
+|---|---|---|
+| `lib/auth` | 33 | JWT decode, roles, token storage |
+| `lib/api` | 61 | Typed fetch client, all API namespaces |
+| `auth/login` | 17 | Login form, tab switch, redirects |
+| `auth/register/merchant` | 21 | Registration form, submit, success |
+| `merchant/dashboard` | 13 | KPI aggregation, loading/error states |
+| `merchant/transactions` | 18 | Table, status badges, pagination |
+| `merchant/accounting` | 23 | GL export, platform tabs, connect flow |
+| `merchant/analytics` | 9 | Revenue charts, peak hours |
+| `merchant/devices` | 15 | Fleet list, alerts, battery badges |
+| `merchant/loyalty` | 18 | Programme type toggle, save flow |
+| `merchant/onboarding` | 14 | Onboarding form, KRA PIN, redirect |
+| `merchant/settings` | 16 | Profile pre-fill, save, error |
+| `merchant/scan` | 21 | NFC fallback, amount validation, payment flow |
+| `consumer/dashboard` | 21 | Transaction history, status colours |
+| `consumer/profile` | 18 | Read-only phone, display name edit |
+| `consumer/loyalty` | 24 | Points/stamps cards, progress, redeem |
+| `consumer/pay` | 17 | KSh→cents, idempotency, success/error |
+| `admin/merchants` | 26 | Approve/reject/suspend, action states |
+| `admin/fleet` | 30 | Device list, battery warnings, alerts |
+
+E2E specs (Playwright — all use `page.route()` mocks, no live backend needed):
+
+| Spec | What it covers |
 |---|---|
-| `auth.test.ts` | Merchant login, consumer auth, approval gate, constant-time dummy compare |
-| `transactions.test.ts` | STK Push flow, amount bounds, source validation |
-| `idempotency.test.ts` | Idempotency key deduplication (cache hit + DB hit) |
-| `idempotency-race.test.ts` | Concurrent requests with the same key |
-| `concurrency.test.ts` | Race conditions on idempotency check |
-| `mpesa-callback.test.ts` | Callback parsing, status transitions, idempotent re-delivery |
-| `callback-edge-cases.test.ts` | Duplicate callbacks, out-of-order delivery, unknown `checkoutRequestId` |
-| `reconciliation.test.ts` | Stuck transaction recovery, PENDING/STK_SENT expiry |
-| `circuit-breaker.test.ts` | CLOSED → OPEN → HALF_OPEN → CLOSED state machine |
-| `safaricom-ip.test.ts` | IP allowlist enforcement, IPv4-mapped IPv6, dev bypass |
-| `nfc-security.test.ts` | Tag signature validation, replay attack prevention |
-| `hce-token.test.ts` | HCE token issuance, constant-time verify, expiry |
-| `consumer-tag.test.ts` | Consumer identity verification via tag ID |
-| `consumer-qr.test.ts` | Consumer QR token issuance and validation |
-| `merchant-hce.test.ts` | Merchant HCE session handling |
-| `payment-links.test.ts` | Single-use shareable payment link lifecycle |
-| `split-payments.test.ts` | Group bill splitting |
-| `p2p-transactions.test.ts` | Consumer-initiated payment flow |
-| `fraud-scoring.test.ts` | Velocity checks, amount deviation scoring |
-| `device-binding.test.ts` | Single-device enforcement on login |
-| `fx.test.ts` | FX rate lookup, conversion, fallback chain |
-| `vat.test.ts` | VAT calculation |
-| `compliance.test.ts` | KRA / CBK audit log field requirements |
-| `cbk-compliance.test.ts` | CBK audit trail completeness |
-| `daraja.test.ts` | Access token caching, STK Push, STK Query, error handling |
-| `realtime-ws.test.ts` | WebSocket connection, auth, message delivery |
-| `z-report.test.ts` | Z-report generation, daily settlement totals |
-| `latency-tracker.test.ts` | P95/P99 histogram accuracy |
-| `security-injection.test.ts` | SQL injection, XSS, oversized payloads |
-| `protocol-handshake.test.ts` | NFC NDEF format, signing, tag ID length |
-| `immutable-ledger.test.ts` | Transaction immutability (no status rollbacks) |
+| `auth/login.spec.ts` | Merchant + consumer login, lockout, redirect |
+| `auth/register.spec.ts` | Merchant registration + pending state |
+| `merchant/dashboard.spec.ts` | KPI cards, chart rendering, navigation |
+| `merchant/scan.spec.ts` | NFC fallback, amount entry, payment + polling |
+| `merchant/transactions.spec.ts` | List, detail, status badges, CSV export |
+| `merchant/accounting.spec.ts` | Platform cards, connect flow, GL postings |
+| `merchant/loyalty.spec.ts` | Programme setup, POINTS/STAMPS toggle |
+| `admin/merchant-approval.spec.ts` | Approve/reject/suspend flows |
+| `admin/portal.spec.ts` | Admin login, fleet view |
+| `consumer/pay.spec.ts` | Login → amount → STK Push → confirmed |
+| `consumer/portal.spec.ts` | Consumer pay flow, loyalty, profile |
+| `consumer/loyalty.spec.ts` | Points/stamps cards, redeem threshold |
+
+---
+
+### Android — JUnit unit tests
+
+```bash
+cd android
+
+# Generate Gradle wrapper (one-time — requires gradle in PATH)
+gradle wrapper --gradle-version 8.4
+
+# Run all unit tests
+./gradlew test
+
+# By module
+./gradlew :app:test
+./gradlew :consumer-wallet:test
+./gradlew :softpos:test
+./gradlew :nfc-core:test
+
+# Coverage (HTML report in app/build/reports/coverage/)
+./gradlew :app:testDebugUnitTestCoverage
+
+# Single test class
+./gradlew :app:test --tests "com.orchestratepay.payment.PaymentOrchestratorCoroutineTest"
+```
+
+See [android/README.md](android/README.md) for full setup, emulator setup, and instrumented tests.
 
 ---
 

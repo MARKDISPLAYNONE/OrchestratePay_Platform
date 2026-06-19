@@ -257,7 +257,7 @@ export default function MerchantScanPage() {
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">KSh</span>
               <input
-                type="number" required min="1" step="0.01"
+                type="number" required step="0.01"
                 placeholder="0.00"
                 value={amountKsh}
                 onChange={e => setAmountKsh(e.target.value)}

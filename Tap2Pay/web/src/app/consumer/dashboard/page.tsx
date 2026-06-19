@@ -12,12 +12,14 @@ interface Txn {
 export default function ConsumerDashboard() {
   const [txns, setTxns]       = useState<Txn[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState('')
   const [name, setName]       = useState<string | null>(null)
 
   useEffect(() => {
     setName(getName())
     consumers.getTransactions(10)
       .then(res => setTxns(res.transactions ?? []))
+      .catch(() => setError('Failed to load transactions — please refresh.'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -44,6 +46,11 @@ export default function ConsumerDashboard() {
       <div>
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Recent payments</h2>
         {loading && <p className="text-sm text-gray-400">Loading…</p>}
+        {error && (
+          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {error}
+          </div>
+        )}
         <div className="space-y-2">
           {txns.map(t => (
             <div key={t.id} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center justify-between">
@@ -65,7 +72,7 @@ export default function ConsumerDashboard() {
               </div>
             </div>
           ))}
-          {!loading && txns.length === 0 && (
+          {!loading && !error && txns.length === 0 && (
             <p className="text-sm text-gray-400 text-center py-6">No transactions yet</p>
           )}
         </div>

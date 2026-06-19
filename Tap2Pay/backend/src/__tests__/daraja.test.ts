@@ -1,4 +1,4 @@
-import { normalisePhone } from '../integrations/daraja'
+import { normalisePhone, initiateB2cPayout } from '../integrations/daraja'
 
 describe('normalisePhone', () => {
   it('passes through an already-normalised number', () => {
@@ -42,5 +42,13 @@ describe('Daraja constants', () => {
     // This test documents the expected behaviour for the team.
     // When DARAJA_ENVIRONMENT switching is added, update this test.
     expect(process.env.DARAJA_ENVIRONMENT).not.toBe('production')
+  })
+})
+
+describe('initiateB2cPayout', () => {
+  it('throws a not-yet-implemented error', async () => {
+    await expect(
+      initiateB2cPayout({ refundId: 'r-1', merchantId: 'm-1', amountCents: 1000 })
+    ).rejects.toThrow('not yet implemented')
   })
 })

@@ -25,6 +25,23 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
 const router = Router()
 
+// GET /api/v1/devices — merchant's own registered devices
+router.get('/', requireAuth, async (req, res) => {
+    const merchantId = (req as any).merchant.sub
+    const { rows } = await db.query(`
+        SELECT
+          d.id, d.device_serial, d.model,
+          d.app_version_code, d.last_seen_at, d.active,
+          COUNT(a.id) FILTER (WHERE a.resolved = FALSE) AS unresolved_alerts
+        FROM devices d
+        LEFT JOIN device_alerts a ON a.device_id = d.id
+        WHERE d.merchant_id = $1
+        GROUP BY d.id
+        ORDER BY d.last_seen_at DESC NULLS LAST
+    `, [merchantId])
+    res.json(rows)
+})
+
 // POST /api/v1/devices/telemetry — authenticated by merchant JWT
 router.post('/telemetry', requireAuth, async (req, res) => {
     const merchantId = (req as any).merchant.sub
@@ -130,28 +147,38 @@ adminFleetRouter.use(requireAdmin)
 adminFleetRouter.get('/', async (_req, res) => {
     const { rows } = await db.query(`
         SELECT
-          d.id, d.merchant_id, d.device_serial, d.model,
+          d.id, d.merchant_id, d.device_serial, d.model, d.device_type,
           d.app_version_code, d.last_seen_at, d.active,
+          m.name AS merchant_name,
+          t.battery_pct, t.printer_status, t.nfc_available,
           COUNT(a.id) FILTER (WHERE a.resolved = FALSE) AS unresolved_alerts
         FROM devices d
+        JOIN merchants m ON m.id = d.merchant_id
+        LEFT JOIN LATERAL (
+          SELECT battery_pct, printer_status, nfc_available
+          FROM device_telemetry
+          WHERE device_id = d.id
+          ORDER BY recorded_at DESC LIMIT 1
+        ) t ON TRUE
         LEFT JOIN device_alerts a ON a.device_id = d.id
-        GROUP BY d.id
+        GROUP BY d.id, m.name, t.battery_pct, t.printer_status, t.nfc_available
         ORDER BY d.last_seen_at DESC NULLS LAST
     `)
-    res.json(rows)
+    res.json({ devices: rows })
 })
 
 adminFleetRouter.get('/alerts', async (req, res) => {
     const unresolvedOnly = 'unresolved' in req.query
     const { rows } = await db.query(`
-        SELECT a.*, d.device_serial, d.merchant_id
+        SELECT a.*, d.device_serial, m.name AS merchant_name
         FROM device_alerts a
         JOIN devices d ON d.id = a.device_id
+        JOIN merchants m ON m.id = d.merchant_id
         ${unresolvedOnly ? 'WHERE a.resolved = FALSE' : ''}
         ORDER BY a.created_at DESC
         LIMIT 200
     `)
-    res.json(rows)
+    res.json({ alerts: rows })
 })
 
 adminFleetRouter.get('/:deviceId', async (req, res) => {

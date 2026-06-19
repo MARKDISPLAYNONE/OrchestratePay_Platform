@@ -6,7 +6,8 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null)
   const [displayName, setDisplayName] = useState('')
   const [smsOptIn, setSmsOptIn]       = useState(false)
-  const [saved, setSaved]   = useState(false)
+  const [saved, setSaved]     = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -21,9 +22,14 @@ export default function ProfilePage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    await consumers.updateProfile({ displayName, smsOptIn })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    setSaveError('')
+    try {
+      await consumers.updateProfile({ displayName, smsOptIn })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (err: any) {
+      setSaveError(err.message ?? 'Failed to save — please try again.')
+    }
   }
 
   if (loading) return <div className="py-6 text-sm text-gray-400">Loading…</div>
@@ -49,8 +55,9 @@ export default function ProfilePage() {
         <h2 className="text-sm font-semibold text-gray-700">Preferences</h2>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Display name</label>
+          <label htmlFor="display-name" className="block text-sm font-medium text-gray-700 mb-1">Display name</label>
           <input
+            id="display-name"
             type="text"
             value={displayName}
             onChange={e => setDisplayName(e.target.value)}
@@ -73,6 +80,12 @@ export default function ProfilePage() {
             </div>
           </div>
         </label>
+
+        {saveError && (
+          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {saveError}
+          </div>
+        )}
 
         <button
           type="submit"

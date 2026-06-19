@@ -165,6 +165,70 @@ async function checkDeviceBinding(payload: MerchantPayload, res: Response): Prom
   }
 }
 
+// ─── requireApiKey ────────────────────────────────────────────────────────────
+// Accepts X-API-Key: op_<hex64> header as an alternative to Bearer JWT.
+// Looks up the SHA-256 hash of the key in merchant_api_keys; on match attaches
+// req.merchant and calls next(). On any DB error, fails closed (401).
+
+export async function requireApiKey(req: Request, res: Response, next: NextFunction) {
+  const apiKey = req.headers['x-api-key'] as string | undefined
+  if (!apiKey || !apiKey.startsWith('op_')) {
+    return res.status(401).json({ error: 'Missing or invalid X-API-Key header' })
+  }
+
+  const crypto = await import('crypto')
+  const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex')
+
+  try {
+    const { rows } = await db.query(
+      `SELECT k.id, k.merchant_id, m.name, k.expires_at
+         FROM merchant_api_keys k
+         JOIN merchants m ON m.id = k.merchant_id
+        WHERE k.key_hash = $1 AND k.active = TRUE AND m.active = TRUE`,
+      [keyHash]
+    )
+
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid or revoked API key' })
+    }
+
+    const row = rows[0]
+    if (row.expires_at && new Date(row.expires_at) < new Date()) {
+      return res.status(401).json({ error: 'API key has expired' })
+    }
+
+    // Update last_used_at fire-and-forget — never block the request on this
+    db.query(
+      `UPDATE merchant_api_keys SET last_used_at = NOW() WHERE id = $1`,
+      [row.id]
+    ).catch(() => {})
+
+    req.merchant = {
+      sub:      row.merchant_id,
+      name:     row.name,
+      role:     'MERCHANT',
+      deviceId: '',
+      iat:      0,
+      exp:      0,
+    }
+    next()
+  } catch (err: any) {
+    logger.error('API key lookup failed', { error: err.message })
+    res.status(401).json({ error: 'Authentication failed' })
+  }
+}
+
+// ─── requireAuthOrApiKey ──────────────────────────────────────────────────────
+// Accepts either a Bearer JWT or an X-API-Key header. Useful for endpoints that
+// merchants can call from both their Android terminal and server-to-server.
+
+export function requireAuthOrApiKey(req: Request, res: Response, next: NextFunction) {
+  if (req.headers['x-api-key']) {
+    return requireApiKey(req, res, next)
+  }
+  return requireAuth(req, res, next)
+}
+
 // ─── Internal helper ─────────────────────────────────────────────────────────
 
 function extractJwt(req: Request, res: Response): object | null {

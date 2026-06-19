@@ -56,6 +56,13 @@ import { runGlPostingJob }          from './jobs/gl-posting'
 import paymentLinksRouter           from './routes/payment-links'
 import splitPaymentsRouter          from './routes/split-payments'
 import paymentRailsRouter           from './routes/payment-rails'
+import webhooksRouter               from './routes/webhooks'
+import apiKeysRouter                from './routes/api-keys'
+import disputesRouter               from './routes/disputes'
+import refundsRouter                from './routes/refunds'
+import subscriptionsRouter          from './routes/subscriptions'
+import { runWebhookDeliveryJob }    from './jobs/webhook-delivery'
+import { runSubscriptionBillingJob, runTrialExpiry } from './jobs/subscription-billing'
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '3000')
@@ -213,6 +220,11 @@ app.use('/api/v1/admin/fx',       adminFxRouter)        // FX admin (force refre
 app.use('/api/v1/payment-links',  paymentLinksRouter)   // shareable single-use payment links
 app.use('/api/v1/split-payments', splitPaymentsRouter)  // group bill splitting
 app.use('/api/v1/rails',          paymentRailsRouter)   // multi-currency payment rail routing
+app.use('/api/v1/webhooks',       webhooksRouter)        // merchant webhook subscriptions
+app.use('/api/v1/api-keys',       apiKeysRouter)         // merchant API key management
+app.use('/api/v1/disputes',       disputesRouter)        // payment dispute lifecycle
+app.use('/api/v1/refunds',        refundsRouter)         // B2C refund initiation
+app.use('/api/v1/subscriptions',  subscriptionsRouter)   // recurring subscription plans
 // requireSafaricomIp blocks non-Safaricom IPs in production (bypass in dev/test)
 app.use('/api/v1/mpesa-callback', requireSafaricomIp, mpesaCallbackRouter)
 
@@ -308,6 +320,33 @@ async function start() {
         await runGlPostingJob()
       } catch (err: any) {
         logger.error('GL posting job failed', { error: err.message })
+      }
+    })
+
+    // Deliver queued webhook events every minute
+    cron.schedule('* * * * *', async () => {
+      try {
+        await runWebhookDeliveryJob()
+      } catch (err: any) {
+        logger.error('Webhook delivery job failed', { error: err.message })
+      }
+    })
+
+    // Fire subscription billing every minute (job is internally idempotent)
+    cron.schedule('* * * * *', async () => {
+      try {
+        await runSubscriptionBillingJob()
+      } catch (err: any) {
+        logger.error('Subscription billing job failed', { error: err.message })
+      }
+    })
+
+    // Expire trials daily at 02:00
+    cron.schedule('0 2 * * *', async () => {
+      try {
+        await runTrialExpiry()
+      } catch (err: any) {
+        logger.error('Trial expiry job failed', { error: err.message })
       }
     })
 

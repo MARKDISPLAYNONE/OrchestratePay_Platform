@@ -158,6 +158,7 @@ Or in Android Studio:
 
 | Test file | What it covers |
 |-----------|----------------|
+| `PaymentOrchestratorCoroutineTest` | Amount validation, retry idempotency key, audit log ordering, WS result variants, poll timeout boundary |
 | `PaymentOrchestratorTest` | Amount validation, double-tap prevention, retry logic |
 | `ConsumerQrFlowTest` | CONSUMER_QR payment source end-to-end |
 | `SoftPosResultTest` | SoftPosResult sealed class variants |
@@ -167,11 +168,14 @@ Or in Android Studio:
 | `NfcUriParserTest` | NFC URI parsing |
 | `ApiResponseMappingTest` | API data class field contracts |
 | `WsPaymentResultTest` | WebSocket result sealed class + JSON parsing |
+| `SunmiPrinterStateMachineTest` | Printer state machine, AIDL status codes, receipt content, VAT block, bitmap height |
 | `SunmiPrinterManagerTest` | VAT calculation, printer state sealed class |
 | `MerchantHceSessionTest` | HCE session activate/get/expire/clear |
 | `ApduHandshakeTest` | APDU byte protocol logic |
+| `NfcSignatureVerifierDerivationTest` | Per-merchant key isolation, cross-merchant cloning attack, NDEF URI parsing |
 | `NfcSignatureVerifierTest` | HMAC signature verification |
 | `NfcReaderManagerTest` | NFC reader state machine |
+| `OfflineQueueRoomTest` | Room DB contract, `OnConflictStrategy.IGNORE` dedup, `QueueSyncService.flushQueue` sync logic |
 | `OfflineQueueTest` | Offline queue enqueue/drain logic |
 | `QueuedIntentTest` | QueuedIntent fields, pruning, retry rules |
 | `ConnectivityMonitorTest` | Network state observation |
@@ -182,6 +186,12 @@ Or in Android Studio:
 | `TelemetryWorkerTest` | Telemetry worker logic |
 | `DeviceTelemetryTest` | DeviceTelemetry data class + battery health mapping |
 | `ConsumerQrScannerTest` | QR scanner activity logic |
+
+### Consumer Wallet (`consumer-wallet/`)
+
+| Test file | What it covers |
+|-----------|----------------|
+| `ConsumerHceTokenHandlerTest` | SELECT AID, GET DATA payload, CONFIRM single-use, P2P session priority, TOKEN_TTL_MS |
 
 ### SoftPOS App (`softpos/`)
 

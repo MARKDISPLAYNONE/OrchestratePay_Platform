@@ -20,7 +20,7 @@ export default function ConsumerLayout({ children }: { children: React.ReactNode
     if (getRole() !== 'CONSUMER') {
       router.replace('/auth/login')
     }
-  }, [router])
+  }, [router, pathname])
 
   return (
     <div className="min-h-screen bg-gray-50">

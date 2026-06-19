@@ -7,7 +7,7 @@
 
 import {
   ApiError,
-  saveAdminSecret, clearAdminSecret, hasAdminSecret,
+  saveAdminSecret, clearAdminSecret, hasAdminSecret, verifyAdminSecret,
   auth, merchants, consumers, transactions, fx, devices, accounting, loyalty, admin,
 } from '../api'
 
@@ -504,6 +504,34 @@ describe('loyalty', () => {
     const r = await loyalty.getBalance()
     expect(lastCallUrl()).toContain('/loyalty/balance')
     expect(r.points).toBe(350)
+  })
+})
+
+// ─── verifyAdminSecret ────────────────────────────────────────────────────────
+
+describe('verifyAdminSecret', () => {
+  it('GETs /api/v1/admin/stats with X-Admin-Secret extraHeader', async () => {
+    mockOk({ valid: true })
+    await verifyAdminSecret('test-secret-key')
+    expect(lastCallUrl()).toContain('/api/v1/admin/stats')
+    expect(lastCallOpts().method).toBe('GET')
+    expect(lastCallOpts().headers['X-Admin-Secret']).toBe('test-secret-key')
+  })
+
+  it('omits the Bearer Authorization header (auth: false)', async () => {
+    sessionStorage.setItem('token', 'some-jwt')
+    mockOk({})
+    await verifyAdminSecret('secret')
+    expect(lastCallOpts().headers['Authorization']).toBeUndefined()
+  })
+
+  it('does not inject stored admin secret (adminAuth: false, only extraHeaders)', async () => {
+    saveAdminSecret('stored-admin-secret')
+    mockOk({})
+    await verifyAdminSecret('override-secret')
+    // The stored admin secret should NOT be injected (adminAuth: false)
+    // Only the explicitly passed secret via extraHeaders is used
+    expect(lastCallOpts().headers['X-Admin-Secret']).toBe('override-secret')
   })
 })
 

@@ -612,3 +612,73 @@ describe('post-processing .catch() handlers', () => {
     expect(res.status).toBe(200)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// .catch(() => {}) handler coverage — make underlying DB calls reject
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('mpesa-callback .catch() handler coverage', () => {
+  it('line 80: catch swallows malformed-body log INSERT failure', async () => {
+    // malformed body → stkCallback missing → INSERT daraja_callback_log rejects → caught
+    mockQuery.mockRejectedValueOnce(new Error('DB log INSERT failed'))
+
+    const app = buildApp()
+    const res = await request(app)
+      .post('/api/v1/mpesa-callback')
+      .send({ garbage: 'data' })
+
+    await waitAsync()
+
+    expect(res.status).toBe(200)
+    const logInsert = mockQuery.mock.calls.find((c: any[]) =>
+      String(c[0]).includes('daraja_callback_log')
+    )
+    expect(logInsert).toBeTruthy()
+  })
+
+  it('line 182: catch swallows verified=false UPDATE failure when callback verification fails', async () => {
+    // stkQuery says ResultCode=2 (not 0) → CALLBACK VERIFICATION FAILED branch
+    // UPDATE daraja_callback_log SET verified=false rejects → line 182 catch
+    mockStkQuery.mockResolvedValueOnce({ resultCode: 2, resultDesc: 'Spoofed' })
+
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: 'log-182' }] })         // INSERT daraja_callback_log
+      .mockResolvedValueOnce({ rows: [TXN_ROW] })                    // SELECT transaction
+      .mockRejectedValueOnce(new Error('UPDATE verified=false failed'))  // line 182 catch
+      .mockResolvedValue({ rows: [], rowCount: 1 })                   // UPDATE transactions FAILED
+
+    const app = buildApp()
+    await request(app)
+      .post('/api/v1/mpesa-callback')
+      .send(SUCCESS_CALLBACK)
+
+    await waitAsync()
+    await waitAsync()
+
+    const verifiedFalseCall = mockQuery.mock.calls.find((c: any[]) =>
+      String(c[0]).includes('verified = false')
+    )
+    expect(verifiedFalseCall).toBeTruthy()
+  })
+
+  it('line 205: catch swallows verified UPDATE failure when verification succeeds', async () => {
+    // stkQuery succeeds → UPDATE daraja_callback_log SET verified=true rejects → line 205 catch
+    mockStkQuery.mockResolvedValueOnce({ resultCode: 0 })
+
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: 'log-205' }] })        // INSERT daraja_callback_log
+      .mockResolvedValueOnce({ rows: [TXN_ROW] })                   // SELECT transaction
+      .mockRejectedValueOnce(new Error('UPDATE verified failed'))   // line 205 catch
+      .mockResolvedValue({ rows: [], rowCount: 1 })                  // remaining (CONFIRMED, loyalty, etc.)
+
+    const app = buildApp()
+    const res = await request(app)
+      .post('/api/v1/mpesa-callback')
+      .send(SUCCESS_CALLBACK)
+
+    await waitAsync()
+    await waitAsync()
+
+    expect(res.status).toBe(200)
+  })
+})

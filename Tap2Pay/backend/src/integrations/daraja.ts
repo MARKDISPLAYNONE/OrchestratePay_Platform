@@ -297,3 +297,24 @@ function maskPhone(phone: string): string {
     ? phone.slice(0, 5) + '****' + phone.slice(-2)
     : '****'
 }
+
+export interface B2cPayoutRequest {
+  refundId:    string
+  merchantId:  string
+  amountCents: number
+}
+
+export interface B2cPayoutResult {
+  requestId: string
+}
+
+/**
+ * initiateB2cPayout — trigger an M-Pesa Business-to-Customer payout for a refund.
+ *
+ * NOT YET IMPLEMENTED. This stub always throws so that the refunds route correctly
+ * transitions the refund to FAILED status and returns 502 until B2C credentials
+ * and the Daraja B2C endpoint are configured.
+ */
+export async function initiateB2cPayout(_params: B2cPayoutRequest): Promise<B2cPayoutResult> {
+  throw new Error('initiateB2cPayout is not yet implemented — configure Daraja B2C credentials')
+}

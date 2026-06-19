@@ -5,9 +5,10 @@ import { hasAdminSecret, clearAdminSecret } from '@/lib/api'
 import Link            from 'next/link'
 
 const NAV = [
-  { href: '/admin',           label: 'Dashboard'  },
-  { href: '/admin/merchants', label: 'Merchants'  },
-  { href: '/admin/fleet',     label: 'Fleet'      },
+  { href: '/admin',            label: 'Dashboard' },
+  { href: '/admin/merchants',  label: 'Merchants' },
+  { href: '/admin/fleet',      label: 'Fleet'     },
+  { href: '/admin/consumers',  label: 'Consumers' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

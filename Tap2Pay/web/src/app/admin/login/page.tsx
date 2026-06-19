@@ -1,8 +1,7 @@
 'use client'
 import { useState }            from 'react'
 import { useRouter }           from 'next/navigation'
-import { saveAdminSecret }     from '@/lib/api'
-import { admin }               from '@/lib/api'
+import { saveAdminSecret, clearAdminSecret, verifyAdminSecret } from '@/lib/api'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -15,13 +14,12 @@ export default function AdminLoginPage() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    saveAdminSecret(secret)
     try {
-      await admin.getStats()
+      await verifyAdminSecret(secret)
+      saveAdminSecret(secret)
       router.push('/admin')
     } catch {
       setError('Invalid admin secret — check your .env ADMIN_SECRET value.')
-      import('@/lib/api').then(m => m.clearAdminSecret())
     } finally {
       setLoading(false)
     }

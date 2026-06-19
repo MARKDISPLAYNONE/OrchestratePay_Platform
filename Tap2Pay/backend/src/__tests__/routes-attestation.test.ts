@@ -256,4 +256,31 @@ describe('POST /api/v1/attestation/verify', () => {
     expect(res.status).toBe(500)
     expect(res.body.error).toMatch(/attestation service unavailable/i)
   })
+
+  it('line 122: db.query catch swallows UPDATE devices failure — still returns 200', async () => {
+    process.env.PLAY_INTEGRITY_DECRYPTION_KEY  = 'dk-attest'
+    process.env.PLAY_INTEGRITY_VERIFICATION_KEY = 'vk-attest'
+    process.env.GOOGLE_ACCESS_TOKEN             = 'gcp-tok'
+
+    mockFetch.mockResolvedValue({
+      ok:   true,
+      json: jest.fn().mockResolvedValue({
+        tokenPayloadExternal: {
+          deviceIntegrity: { deviceRecognitionVerdict: ['MEETS_BASIC_INTEGRITY'] },
+          appIntegrity:    { appRecognitionVerdict: 'PLAY_RECOGNIZED' },
+        },
+      }),
+    })
+
+    // The UPDATE devices query rejects — markDeviceAttested catch swallows it
+    mockQuery.mockRejectedValue(new Error('DB UPDATE devices failed'))
+
+    const res = await request(buildApp())
+      .post('/api/v1/attestation/verify')
+      .set('Authorization', `Bearer ${merchantToken()}`)
+      .send({ integrityToken: 'valid-tok', deviceSerial: 'SN-CATCH-TEST' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.attested).toBe(true)
+  })
 })

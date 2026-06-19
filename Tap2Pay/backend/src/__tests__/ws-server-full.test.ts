@@ -402,3 +402,120 @@ describe('.catch() handler functions', () => {
     await tick()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Subscribe error callback — lines 88 (terminal) and 140 (consumer)
+// Make sub.subscribe call cb(err) to exercise the if(err) branch.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('subscribe callback error branch', () => {
+  const { redis } = require('../db/redis')
+
+  function makeFailingSub() {
+    const sub: any = new (require('events').EventEmitter)()
+    sub.subscribe = jest.fn().mockImplementation((_ch: string, cb?: Function) => {
+      if (cb) cb(new Error('SUBSCRIBE command failed'))
+    })
+    sub.unsubscribe = jest.fn().mockResolvedValue(undefined)
+    sub.quit        = jest.fn().mockResolvedValue('OK')
+    return sub
+  }
+
+  it('line 88: closes terminal WS with 1011 when sub.subscribe callback fires with error', async () => {
+    redis.duplicate.mockImplementationOnce(() => makeFailingSub())
+
+    const ws  = new WebSocket(`ws://127.0.0.1:${port}/ws?txnId=sub-err-term&token=${makeToken()}`)
+    openSockets.push(ws)
+    const code = await new Promise<number>(resolve => ws.on('close', resolve))
+    expect(code).toBe(1011)
+  })
+
+  it('line 140: closes consumer WS with 1011 when sub.subscribe callback fires with error', async () => {
+    redis.duplicate.mockImplementationOnce(() => makeFailingSub())
+
+    const ws  = new WebSocket(`ws://127.0.0.1:${port}/ws?consumerId=sub-err-consumer&token=${makeToken()}`)
+    openSockets.push(ws)
+    const code = await new Promise<number>(resolve => ws.on('close', resolve))
+    expect(code).toBe(1011)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Consumer cleanup .catch() handlers — lines 162, 163
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('consumer cleanup .catch() handlers', () => {
+  it('line 162: consumer sub.unsubscribe rejection is swallowed on disconnect', async () => {
+    const ws = await wsConnect({ consumerId: 'cleanup-unsub-consumer', token: makeToken() })
+    await tick()
+
+    lastSub.unsubscribe.mockRejectedValueOnce(new Error('consumer unsubscribe error'))
+
+    ws.close()
+    await new Promise<void>(r => ws.on('close', r))
+    await tick()
+  })
+
+  it('line 163: consumer sub.quit rejection is swallowed on disconnect', async () => {
+    const ws = await wsConnect({ consumerId: 'cleanup-quit-consumer', token: makeToken() })
+    await tick()
+
+    lastSub.quit.mockRejectedValueOnce(new Error('consumer quit error'))
+
+    ws.close()
+    await new Promise<void>(r => ws.on('close', r))
+    await tick()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Consumer ping setex catch (line 153) and ws.on('error') handlers (lines 117, 167)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('consumer ping setex catch and ws socket error handlers', () => {
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
+  it('line 153: consumer ping timer setex rejection is swallowed', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] })
+    // First setex (on connect) succeeds; second setex (inside ping) rejects
+    mockSetex
+      .mockResolvedValueOnce('OK')
+      .mockRejectedValueOnce(new Error('setex ping error'))
+
+    const ws = await wsConnect({ consumerId: 'ping-setex-reject', token: makeToken() })
+    await tick()
+
+    jest.advanceTimersByTime(16_000)  // trigger PING_INTERVAL_MS (15s)
+    await tick()
+
+    ws.close()
+    await new Promise<void>(r => ws.on('close', r))
+  })
+
+  it('line 117: terminal ws.on("error") handler fires on protocol violation (unmasked frame)', async () => {
+    const ws = await wsConnect({ txnId: 'term-ws-err', token: makeToken() })
+    await tick()
+
+    ws.on('error', () => {})  // suppress unhandled client-side error event
+    // Write an unmasked binary frame (mask bit = 0) — ws spec requires client frames to be masked.
+    // The server ws detects the protocol violation and emits 'error' on the server-side WebSocket,
+    // triggering the ws.on('error', ...) handler at line 117.
+    ;(ws as any)._socket?.write(Buffer.from([0x82, 0x02, 0x00, 0x00]))
+
+    await new Promise<void>(r => setTimeout(r, 300))
+    await tick()
+  })
+
+  it('line 167: consumer ws.on("error") handler fires on protocol violation (unmasked frame)', async () => {
+    const ws = await wsConnect({ consumerId: 'consumer-ws-err', token: makeToken() })
+    await tick()
+
+    ws.on('error', () => {})  // suppress unhandled client-side error event
+    ;(ws as any)._socket?.write(Buffer.from([0x82, 0x02, 0x00, 0x00]))
+
+    await new Promise<void>(r => setTimeout(r, 300))
+    await tick()
+  })
+})

@@ -13,10 +13,12 @@ interface Balance {
 export default function LoyaltyPage() {
   const [balances, setBalances] = useState<Balance[]>([])
   const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState('')
 
   useEffect(() => {
     consumers.getLoyalty()
       .then(res => setBalances(res.balances ?? []))
+      .catch(() => setError('Failed to load loyalty rewards — please try again.'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -26,7 +28,13 @@ export default function LoyaltyPage() {
 
       {loading && <p className="text-sm text-gray-400">Loading…</p>}
 
-      {!loading && balances.length === 0 && (
+      {error && (
+        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && balances.length === 0 && (
         <div className="text-center py-12 text-gray-400">
           <p className="text-4xl mb-3">🎯</p>
           <p className="text-sm">No loyalty cards yet — pay at a merchant to start earning</p>
@@ -36,7 +44,7 @@ export default function LoyaltyPage() {
       {balances.map(b => {
         const isPoints = !b.reward_type || b.reward_type === 'POINTS'
         const balance  = isPoints ? b.points_balance : b.stamps_balance
-        const threshold = b.redeem_threshold ?? 1000
+        const threshold = b.redeem_threshold || 1000
         const pct = Math.min(100, Math.round((balance / threshold) * 100))
 
         return (

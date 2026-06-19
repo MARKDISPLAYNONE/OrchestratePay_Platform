@@ -41,6 +41,15 @@ export default function AdminDashboard() {
         </p>
       </div>
 
+      {/* Platform overview */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Platform</h2>
+        <div className="grid grid-cols-2 gap-4">
+          <StatCard label="Merchants onboarded" value={stats?.merchants?.total ?? 0} sub="Approved accounts" />
+          <StatCard label="Consumers registered" value={stats?.consumers?.total ?? 0} sub="Active accounts" />
+        </div>
+      </div>
+
       {/* Infrastructure */}
       <div>
         <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Infrastructure</h2>

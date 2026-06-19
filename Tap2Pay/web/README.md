@@ -156,13 +156,22 @@ BASE_URL=https://staging.orchestratepay.co.ke npx playwright test
 
 ### E2E test suites
 
+All E2E specs intercept API calls with `page.route()` mocks — no live backend required.
+
 | Spec file | What it covers |
 |-----------|---------------|
 | `e2e/auth/login.spec.ts` | Merchant + consumer login, lockout, redirect |
 | `e2e/auth/register.spec.ts` | Merchant registration form + pending state |
 | `e2e/merchant/dashboard.spec.ts` | KPI cards, chart rendering, navigation |
-| `e2e/consumer/portal.spec.ts` | Consumer pay flow, loyalty balance, profile |
+| `e2e/merchant/scan.spec.ts` | NFC fallback banner, amount entry, STK Push + poll → success/failure |
+| `e2e/merchant/transactions.spec.ts` | List columns, status badges, row detail, receipt, CSV export |
+| `e2e/merchant/accounting.spec.ts` | Platform cards, connect/disconnect, GL posting log |
+| `e2e/merchant/loyalty.spec.ts` | Programme onboarding, POINTS/STAMPS toggle, save flow |
+| `e2e/admin/merchant-approval.spec.ts` | Approve/reject/suspend flows, notes field, error state |
 | `e2e/admin/portal.spec.ts` | Admin login, merchant approval, fleet view |
+| `e2e/consumer/pay.spec.ts` | Auth stage → amount stage → STK Push → confirmed/failed |
+| `e2e/consumer/portal.spec.ts` | Consumer pay flow, loyalty balance, profile |
+| `e2e/consumer/loyalty.spec.ts` | Points/stamps cards, progress bar, redeem threshold, empty state |
 
 ---
 
@@ -176,7 +185,19 @@ BASE_URL=https://staging.orchestratepay.co.ke npx playwright test
 | `auth/register/merchant/__tests__/MerchantRegisterPage.test.tsx` | 21 | Registration form, submit, success state, error handling |
 | `merchant/dashboard/__tests__/MerchantDashboard.test.tsx` | 13 | KPI aggregation, loading/error/empty states, payment sources |
 | `merchant/transactions/__tests__/TransactionsPage.test.tsx` | 18 | Table render, status badges, row navigation, pagination, empty/error states |
+| `merchant/accounting/__tests__/AccountingPage.test.tsx` | 23 | GL export, all four platforms, connect flow, token input, GL posting log |
+| `merchant/analytics/__tests__/AnalyticsPage.test.tsx` | 9 | Revenue section, peak hours, empty data, loading placeholders |
+| `merchant/devices/__tests__/DevicesPage.test.tsx` | 15 | Fleet list, battery/NFC/printer badges, alerts count, empty/error states |
+| `merchant/loyalty/__tests__/LoyaltyPage.test.tsx` | 18 | POINTS/STAMPS toggle, field switching, no-programme banner, save flow |
+| `merchant/onboarding/__tests__/OnboardingPage.test.tsx` | 14 | All fields, validation, KRA PIN, submit → redirect, error display |
+| `merchant/settings/__tests__/SettingsPage.test.tsx` | 16 | Profile pre-fill, editable name, save success/error, "Saving…" state |
+| `merchant/scan/__tests__/ScanPage.test.tsx` | 21 | NFC unsupported fallback, amount validation, STK Push, CONFIRMED/DECLINED |
 | `consumer/pay/__tests__/ConsumerPayPage.test.tsx` | 17 | KSh→cents conversion, idempotency key, success/loading/error states |
+| `consumer/dashboard/__tests__/ConsumerDashboard.test.tsx` | 21 | Transaction history, status colour badges, KPI totals, empty state |
+| `consumer/profile/__tests__/ConsumerProfile.test.tsx` | 18 | Read-only phone, editable display name, save, SMS opt-in checkbox |
+| `consumer/loyalty/__tests__/ConsumerLoyalty.test.tsx` | 24 | Points/stamps cards, progress bar, "ready to redeem", multiple merchants |
+| `admin/merchants/__tests__/AdminMerchants.test.tsx` | 26 | Approve/reject/suspend flows, action in-flight state, error banner |
+| `admin/fleet/__tests__/AdminFleet.test.tsx` | 30 | Device list, battery warning colours, printer codes, NFC status, alerts |
 
 ---
 
