@@ -68,7 +68,7 @@ export default function MerchantLoyaltyPage() {
 
       {!prog && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700">
-          You don't have a loyalty programme yet. Set one up below — it activates immediately.
+          You don&apos;t have a loyalty programme yet. Set one up below — it activates immediately.
         </div>
       )}
 

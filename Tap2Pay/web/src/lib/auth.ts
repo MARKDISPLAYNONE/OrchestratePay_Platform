@@ -35,20 +35,19 @@ export function saveToken(token: string, persistent = false) {
     sessionStorage.setItem('token', token)
     localStorage.removeItem('token')
   }
-  // Set a cookie so Next.js middleware can gate routes server-side.
-  // Not httpOnly (client JS clears it on logout), but prevents unauthenticated
-  // SSR from rendering protected pages before the client-side guard fires.
-  const payload = decode(token)
-  const role = payload?.role ?? 'MERCHANT'
+  // Write the JWT into a cookie so Next.js middleware can verify it
+  // cryptographically (via jwtVerify) on every protected-route request.
+  // SameSite=Strict blocks cross-site delivery; Secure should be enforced
+  // at the infrastructure layer (load balancer / CDN HTTPS redirect).
   const maxAge = persistent ? 60 * 60 * 24 * 30 : ''
   const expires = persistent ? `; max-age=${maxAge}` : ''
-  document.cookie = `auth_role=${role}; path=/${expires}; SameSite=Strict`
+  document.cookie = `token=${token}; path=/${expires}; SameSite=Strict`
 }
 
 export function clearToken() {
   sessionStorage.removeItem('token')
   localStorage.removeItem('token')
-  document.cookie = 'auth_role=; path=/; max-age=0; SameSite=Strict'
+  document.cookie = 'token=; path=/; max-age=0; SameSite=Strict'
 }
 
 export function getToken(): string | null {

@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import Link from 'next/link'
 import { auth } from '@/lib/api'
 import { saveToken } from '@/lib/auth'
 
@@ -62,12 +63,12 @@ export default function LoginClient() {
         style={{ borderBottom: '1px solid rgba(59,130,246,0.12)', background: 'rgba(5,11,24,0.6)', backdropFilter: 'blur(12px)' }}
       >
         {/* Brand */}
-        <a href="/" className="flex items-center gap-2.5 select-none">
+        <Link href="/" className="flex items-center gap-2.5 select-none">
           <Image src="/icons/Icon.png" alt="Tap2Pay" width={32} height={32} className="rounded-lg" />
           <span className="text-white font-bold text-base tracking-tight">
             Tap<span className="text-blue-400">2</span>Pay
           </span>
-        </a>
+        </Link>
 
         {/* Nav links */}
         <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-400">
@@ -79,19 +80,19 @@ export default function LoginClient() {
 
         {/* CTA */}
         <div className="flex items-center gap-3">
-          <a
+          <Link
             href="/auth/register/merchant"
             className="hidden md:inline-flex items-center text-sm font-medium text-slate-400 hover:text-white transition-colors"
           >
             Apply as merchant
-          </a>
-          <a
+          </Link>
+          <Link
             href="/auth/register/consumer"
             className="inline-flex items-center px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all duration-200"
             style={{ background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', boxShadow: '0 2px 10px rgba(37,99,235,0.35)' }}
           >
             Get started
-          </a>
+          </Link>
         </div>
       </header>
 
@@ -209,19 +210,19 @@ export default function LoginClient() {
           <div className="mt-6 text-center text-sm text-slate-500">
             {mode === 'merchant' ? (
               <p>New merchant?{' '}
-                <a href="/auth/register/merchant" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">Apply for access</a>
+                <Link href="/auth/register/merchant" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">Apply for access</Link>
               </p>
             ) : (
               <p>New customer?{' '}
-                <a href="/auth/register/consumer" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">Create account</a>
+                <Link href="/auth/register/consumer" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">Create account</Link>
               </p>
             )}
           </div>
 
           <div className="mt-4 pt-4 border-t border-white/[0.06] text-center">
-            <a href="/admin/login" className="text-xs text-slate-600 hover:text-slate-400 tracking-wide transition-colors">
+            <Link href="/admin/login" className="text-xs text-slate-600 hover:text-slate-400 tracking-wide transition-colors">
               Admin portal →
-            </a>
+            </Link>
           </div>
         </div>
       </main>

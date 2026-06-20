@@ -57,7 +57,7 @@ interface NDEFMessageInit {
   records: NDEFRecordInit[]
 }
 
-declare var NDEFReader: {
+declare const NDEFReader: {
   prototype: NDEFReader
   new(): NDEFReader
 }
