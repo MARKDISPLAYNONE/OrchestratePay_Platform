@@ -15,7 +15,8 @@ export const metadata: Metadata = {
     title:          'OrchestratePay',
   },
   icons: {
-    apple: '/icons/apple-touch-icon.png',
+    icon:  '/icons/Icon.png',
+    apple: '/icons/Icon.png',
   },
   other: {
     'mobile-web-app-capable': 'yes',
@@ -25,7 +26,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width:             'device-width',
   initialScale:      1,
-  themeColor:        '#16a34a',
+  themeColor:        '#2563eb',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

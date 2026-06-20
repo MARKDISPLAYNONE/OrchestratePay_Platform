@@ -422,10 +422,10 @@ describe('fx.getRates', () => {
 // ─── devices namespace ────────────────────────────────────────────────────────
 
 describe('devices', () => {
-  it('getFleet GETs /api/v1/admin/fleet', async () => {
-    mockOk({ devices: [] })
+  it('getFleet GETs /api/v1/devices', async () => {
+    mockOk([])
     await devices.getFleet()
-    expect(lastCallUrl()).toContain('/api/v1/admin/fleet')
+    expect(lastCallUrl()).toContain('/api/v1/devices')
     expect(lastCallOpts().method).toBe('GET')
   })
 

@@ -33,7 +33,7 @@ export default function ConsumerPayPage() {
         <p className="text-gray-500 text-sm max-w-xs mx-auto">{message}</p>
         <button
           onClick={() => { setStatus('idle'); setMerchantId(''); setAmount('') }}
-          className="text-green-600 text-sm hover:underline"
+          className="text-blue-600 text-sm hover:underline"
         >
           Make another payment
         </button>
@@ -55,7 +55,7 @@ export default function ConsumerPayPage() {
             id="merchantId"
             type="text" required placeholder="Paste the merchant ID from their QR code"
             value={merchantId} onChange={e => setMerchantId(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -67,7 +67,7 @@ export default function ConsumerPayPage() {
               id="amount"
               type="number" required min="1" step="0.01" placeholder="0.00"
               value={amount} onChange={e => setAmount(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg pl-12 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg pl-12 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -80,7 +80,7 @@ export default function ConsumerPayPage() {
 
         <button
           type="submit" disabled={status === 'loading'}
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50 transition-colors"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50 transition-colors"
         >
           {status === 'loading' ? 'Sending…' : 'Send payment request'}
         </button>

@@ -86,7 +86,7 @@ export default function AccountingPage() {
                 <>
                   <button
                     onClick={() => setConnecting(isExpanded ? null : p.id)}
-                    className="text-sm text-green-600 hover:underline"
+                    className="text-sm text-blue-600 hover:underline"
                   >
                     {isExpanded ? 'Cancel' : 'Connect'}
                   </button>
@@ -97,12 +97,12 @@ export default function AccountingPage() {
                         placeholder="Paste access token"
                         value={token}
                         onChange={e => setToken(e.target.value)}
-                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       {error && <p className="text-xs text-red-600">{error}</p>}
                       <button
                         onClick={() => connect(p.id)}
-                        className="w-full bg-green-600 text-white text-sm rounded-lg py-1.5"
+                        className="w-full bg-blue-600 text-white text-sm rounded-lg py-1.5"
                       >
                         Save
                       </button>

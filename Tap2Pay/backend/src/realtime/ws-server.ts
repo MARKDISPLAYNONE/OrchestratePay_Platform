@@ -84,7 +84,7 @@ function handleTerminalConnection(ws: WebSocket, txnId: string) {
     ws.close(1011, 'Internal error')
   })
 
-  sub.subscribe(channel, (err) => {
+  void sub.subscribe(channel, (err) => {
     if (err) { logger.error('WS: subscribe failed', { channel, error: err.message }); ws.close(1011, 'Subscribe failed') }
   })
 
@@ -136,7 +136,7 @@ function handleConsumerConnection(ws: WebSocket, consumerId: string, _payload: a
     ws.close(1011, 'Internal error')
   })
 
-  sub.subscribe(channel, (err) => {
+  void sub.subscribe(channel, (err) => {
     if (err) { logger.error('WS: consumer subscribe failed', { channel, error: err.message }); ws.close(1011, 'Subscribe failed') }
   })
 

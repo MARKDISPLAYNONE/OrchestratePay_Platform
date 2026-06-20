@@ -157,7 +157,7 @@ export default function QrPayPage() {
             <p className="font-mono text-xs text-gray-500">M-Pesa ref: {mpesaRef}</p>
           )}
           <a href={`/pay/${merchant?.id}`}
-            className="inline-block mt-4 text-sm text-green-600 hover:underline">
+            className="inline-block mt-4 text-sm text-blue-600 hover:underline">
             Make another payment
           </a>
         </div>
@@ -174,7 +174,7 @@ export default function QrPayPage() {
           <p className="text-red-600 text-sm">{error}</p>
           <button
             onClick={() => { setStage('amount'); setError('') }}
-            className="mt-2 text-sm text-green-600 hover:underline"
+            className="mt-2 text-sm text-blue-600 hover:underline"
           >
             Try again
           </button>
@@ -193,22 +193,22 @@ export default function QrPayPage() {
           <input
             type="email" required placeholder="Email"
             value={email} onChange={e => setEmail(e.target.value)}
-            className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <input
             type="password" required placeholder="Password"
             value={password} onChange={e => setPassword(e.target.value)}
-            className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button type="submit"
-            className="w-full bg-green-600 text-white font-semibold rounded-xl py-3 text-sm">
+            className="w-full bg-blue-600 text-white font-semibold rounded-xl py-3 text-sm">
             Sign in & continue
           </button>
         </form>
         <p className="text-center text-sm text-gray-500 mt-4">
           New here?{' '}
-          <a href="/auth/register/consumer" className="text-green-600 hover:underline">Create account</a>
+          <a href="/auth/register/consumer" className="text-blue-600 hover:underline">Create account</a>
         </p>
       </PageShell>
     )
@@ -240,12 +240,12 @@ export default function QrPayPage() {
             placeholder="0.00"
             value={amountKsh}
             onChange={e => setAmountKsh(e.target.value)}
-            className="w-full border border-gray-300 rounded-xl pl-14 pr-4 py-4 text-2xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-gray-300 rounded-xl pl-14 pr-4 py-4 text-2xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         {error && <p className="text-sm text-red-600 text-center">{error}</p>}
         <button type="submit"
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl py-4 text-lg transition-colors">
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl py-4 text-lg transition-colors">
           Pay with M-Pesa
         </button>
       </form>
@@ -261,7 +261,7 @@ function PageShell({ children, merchantName }: { children: React.ReactNode; merc
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-start pt-12 px-4">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="text-center mb-6">
-          <div className="text-green-600 font-bold text-xl">OrchestratePay</div>
+          <div className="text-blue-600 font-bold text-xl">OrchestratePay</div>
           {merchantName && (
             <div className="text-gray-500 text-sm mt-1">{merchantName}</div>
           )}

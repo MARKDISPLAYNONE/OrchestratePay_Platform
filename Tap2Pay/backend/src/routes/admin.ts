@@ -16,7 +16,7 @@
  * GET /api/v1/admin/circuit
  *   Current state of the Daraja API circuit breaker (CLOSED / OPEN / HALF_OPEN).
  */
-import { Router, Request, Response } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
 import { db } from '../db/index'
 import { redis } from '../db/redis'
 import { logger } from '../util/logger'
@@ -26,7 +26,7 @@ const router = Router()
 
 // ─── Admin guard ──────────────────────────────────────────────────────────────
 
-function requireAdmin(req: Request, res: Response, next: Function) {
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const secret = req.headers['x-admin-secret']
   if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
     logger.warn('Unauthorised admin endpoint access', { ip: req.ip, path: req.path })

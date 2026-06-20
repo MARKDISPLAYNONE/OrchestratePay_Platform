@@ -34,7 +34,7 @@ describe('LoginClient', () => {
 
   it('renders with merchant mode active by default', () => {
     render(<LoginClient />)
-    expect(screen.getByRole('button', { name: /^merchant$/i })).toHaveClass('bg-green-600')
+    expect(screen.getByRole('button', { name: /^merchant$/i })).toHaveClass('bg-blue-600')
     expect(screen.getByRole('link', { name: /apply for access/i })).toBeInTheDocument()
   })
 
@@ -54,7 +54,7 @@ describe('LoginClient', () => {
   it('switches to consumer mode when consumer tab is clicked', async () => {
     render(<LoginClient />)
     await userEvent.click(screen.getByRole('button', { name: /^consumer$/i }))
-    expect(screen.getByRole('button', { name: /^consumer$/i })).toHaveClass('bg-green-600')
+    expect(screen.getByRole('button', { name: /^consumer$/i })).toHaveClass('bg-blue-600')
     expect(screen.getByRole('link', { name: /create account/i })).toBeInTheDocument()
   })
 

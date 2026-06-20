@@ -223,7 +223,7 @@ export default function MerchantScanPage() {
             {errorMsg && <p className="text-sm text-red-600">{errorMsg}</p>}
             <button
               onClick={startScan}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl py-3 text-base transition-colors"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl py-3 text-base transition-colors"
             >
               Start Scanning
             </button>
@@ -261,13 +261,13 @@ export default function MerchantScanPage() {
                 placeholder="0.00"
                 value={amountKsh}
                 onChange={e => setAmountKsh(e.target.value)}
-                className="w-full border border-gray-300 rounded-xl pl-14 pr-4 py-4 text-2xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full border border-gray-300 rounded-xl pl-14 pr-4 py-4 text-2xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
                 autoFocus
               />
             </div>
             {errorMsg && <p className="text-sm text-red-600">{errorMsg}</p>}
             <button type="submit"
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl py-3 text-base transition-colors">
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl py-3 text-base transition-colors">
               Charge with M-Pesa
             </button>
             <button type="button" onClick={reset}
@@ -293,7 +293,7 @@ export default function MerchantScanPage() {
           <p className="text-gray-600">KSh {amountKsh} received</p>
           {mpesaRef && <p className="font-mono text-xs text-gray-500">M-Pesa ref: {mpesaRef}</p>}
           <button onClick={reset}
-            className="w-full bg-green-600 text-white font-bold rounded-xl py-3 text-base">
+            className="w-full bg-blue-600 text-white font-bold rounded-xl py-3 text-base">
             New payment
           </button>
         </div>

@@ -108,7 +108,8 @@ async function processPosting(row: any): Promise<void> {
     [row.id]
   )
 
-  let { access_token: accessToken, refresh_token: refreshToken, realm_id: realmId } = row
+  let { access_token: accessToken, refresh_token: refreshToken } = row
+  const realmId: string = row.realm_id
   const settings  = row.settings ?? {}
   const tokenExpiresAt = row.token_expires_at ? new Date(row.token_expires_at) : null
 

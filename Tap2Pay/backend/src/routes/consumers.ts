@@ -234,7 +234,7 @@ router.get('/me/loyalty', async (req: Request, res: Response) => {
 
 router.post('/pay/:merchantId', validate(consumerPaySchema), async (req: Request, res: Response) => {
   const { merchantId }  = req.params
-  const { amountCents, idempotencyKey, timestamp, currency = 'KES' } = req.body
+  const { amountCents, idempotencyKey, _timestamp, currency = 'KES' } = req.body
   const consumerId = req.consumer!.sub
 
   // ─── Idempotency ─────────────────────────────────────────────────────────
@@ -285,10 +285,12 @@ router.post('/pay/:merchantId', validate(consumerPaySchema), async (req: Request
   if (!isSupportedCurrency(currency)) {
     return res.status(400).json({ error: `Unsupported currency: ${currency}` })
   }
-  let kesAmountCents: number
-  let fxRate: number
+  let kesAmountCents = 0
+  let fxRate = 0
   try {
-    ;({ kesAmountCents, fxRate } = await convertToKes(amountCents, currency))
+    const converted = await convertToKes(amountCents, currency)
+    kesAmountCents = converted.kesAmountCents
+    fxRate = converted.fxRate
   } catch (fxErr: any) {
     logger.error('FX conversion failed (consumer pay)', { currency, amountCents, error: fxErr.message })
     return res.status(503).json({ error: 'Exchange rate unavailable — please try again' })
@@ -409,7 +411,7 @@ router.post('/p2p-token', validate(p2pTokenSchema), async (req: Request, res: Re
 router.post('/p2p-pay', validate(p2pPaySchema), async (req: Request, res: Response) => {
   const payerConsumerId = req.consumer!.sub
   const { p2pToken, payeeConsumerId: bodyPayeeId, amountCents,
-          idempotencyKey, timestamp, source, currency = 'KES' } = req.body
+          idempotencyKey, _timestamp, source, currency = 'KES' } = req.body
 
   // ─── Idempotency ─────────────────────────────────────────────────────────
   const cacheKey = `idempotency:${idempotencyKey}`
@@ -493,16 +495,18 @@ router.post('/p2p-pay', validate(p2pPaySchema), async (req: Request, res: Respon
     logger.error('PLATFORM_MERCHANT_ID points to missing/inactive merchant', { platformMerchantId })
     return res.status(503).json({ error: 'P2P payments temporarily unavailable' })
   }
-  const platform = platformResult.rows[0]
+  const _platform = platformResult.rows[0]
 
   // ─── FX conversion ────────────────────────────────────────────────────────
   if (!isSupportedCurrency(currency)) {
     return res.status(400).json({ error: `Unsupported currency: ${currency}` })
   }
-  let kesAmountCents: number
-  let fxRate: number
+  let kesAmountCents = 0
+  let fxRate = 0
   try {
-    ;({ kesAmountCents, fxRate } = await convertToKes(amountCents, currency))
+    const converted = await convertToKes(amountCents, currency)
+    kesAmountCents = converted.kesAmountCents
+    fxRate = converted.fxRate
   } catch (fxErr: any) {
     logger.error('FX conversion failed (p2p-pay)', { currency, amountCents, error: fxErr.message })
     return res.status(503).json({ error: 'Exchange rate unavailable — please try again' })

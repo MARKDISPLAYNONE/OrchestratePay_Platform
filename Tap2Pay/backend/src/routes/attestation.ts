@@ -61,7 +61,7 @@ router.post('/verify', requireAuth, async (req: Request, res: Response) => {
 
 async function verifyWithGoogle(
   integrityToken: string,
-  nonce: string
+  _nonce: string
 ): Promise<{ passed: boolean; reason?: string }> {
   const decryptionKey   = process.env.PLAY_INTEGRITY_DECRYPTION_KEY
   const verificationKey = process.env.PLAY_INTEGRITY_VERIFICATION_KEY

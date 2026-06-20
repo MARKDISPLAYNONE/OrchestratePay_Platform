@@ -68,7 +68,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: Tap2Pay/backend/package-lock.json
 
@@ -108,7 +108,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: Tap2Pay/web/package-lock.json
 
@@ -181,7 +181,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: |
             Tap2Pay/backend/package-lock.json
@@ -301,7 +301,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: Tap2Pay/backend/package-lock.json
 
@@ -360,6 +360,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: wrapper
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
 
       - name: Run unit tests
         run: ./gradlew test --no-daemon --stacktrace
@@ -572,6 +575,9 @@ jobs:
         with:
           gradle-version: wrapper
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - name: Decode release keystore
         run: |
           mkdir -p keystore
@@ -610,7 +616,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: Tap2Pay/web/package-lock.json
 

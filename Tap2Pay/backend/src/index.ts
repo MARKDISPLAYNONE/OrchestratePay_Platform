@@ -235,7 +235,7 @@ app.use((req, res) => {
 
 // Global error handler — catches any unhandled errors in route handlers
 // Must have 4 parameters for Express to treat it as an error handler
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error('Unhandled route error', {
     error: err.message,
     stack: err.stack,
@@ -370,4 +370,4 @@ process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled Promise rejection', { reason })
 })
 
-start()
+void start()

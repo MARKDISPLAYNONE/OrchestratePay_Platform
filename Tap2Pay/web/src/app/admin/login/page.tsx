@@ -26,7 +26,8 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-gray-900 p-4">
+      <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "url('/pattern.svg')", backgroundRepeat: 'repeat', backgroundSize: '320px 320px', opacity: 0.07 }} />
       <div className="w-full max-w-sm bg-gray-800 rounded-2xl border border-gray-700 p-8">
 
         {/* Back button */}
@@ -41,7 +42,7 @@ export default function AdminLoginPage() {
         </button>
 
         <div className="text-center mb-8">
-          <div className="text-3xl font-bold text-green-400 mb-1">OrchestratePay</div>
+          <div className="text-3xl font-bold text-blue-400 mb-1">OrchestratePay</div>
           <div className="text-sm text-gray-400">Admin Portal</div>
         </div>
 
@@ -53,7 +54,7 @@ export default function AdminLoginPage() {
                 type={showSecret ? 'text' : 'password'} required
                 value={secret} onChange={e => setSecret(e.target.value)}
                 placeholder="Enter ADMIN_SECRET from .env"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 pr-10 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 pr-10 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
                 type="button"
@@ -84,7 +85,7 @@ export default function AdminLoginPage() {
 
           <button
             type="submit" disabled={loading}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50 transition-colors"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50 transition-colors"
           >
             {loading ? 'Verifying…' : 'Sign in to admin'}
           </button>

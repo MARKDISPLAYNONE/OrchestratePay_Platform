@@ -47,7 +47,7 @@ export default function MerchantRegisterPage() {
             Your merchant account is pending review. We will contact you within 1–2 business days.
           </p>
           <button onClick={() => router.push('/auth/login')}
-            className="text-green-600 text-sm hover:underline">
+            className="text-blue-600 text-sm hover:underline">
             Back to sign in
           </button>
         </div>
@@ -85,7 +85,7 @@ export default function MerchantRegisterPage() {
                 placeholder={f.placeholder}
                 value={(form as any)[f.key]}
                 onChange={set(f.key)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           ))}
@@ -98,7 +98,7 @@ export default function MerchantRegisterPage() {
 
           <button
             type="submit" disabled={loading}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50 transition-colors"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50 transition-colors"
           >
             {loading ? 'Submitting…' : 'Submit application'}
           </button>
@@ -106,7 +106,7 @@ export default function MerchantRegisterPage() {
 
         <p className="mt-4 text-center text-sm text-gray-500">
           Already have an account?{' '}
-          <a href="/auth/login" className="text-green-600 hover:underline">Sign in</a>
+          <a href="/auth/login" className="text-blue-600 hover:underline">Sign in</a>
         </p>
       </div>
     </div>

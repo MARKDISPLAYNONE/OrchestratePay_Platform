@@ -33,7 +33,7 @@ export default function ReceiptPage() {
     return (
       <div className="p-8 text-center">
         <p className="text-red-600 mb-4">{error}</p>
-        <button onClick={() => router.back()} className="text-sm text-green-600 hover:underline">
+        <button onClick={() => router.back()} className="text-sm text-blue-600 hover:underline">
           ← Back to transactions
         </button>
       </div>
@@ -105,7 +105,7 @@ export default function ReceiptPage() {
         <div className="mt-6 text-center">
           <button
             onClick={() => window.print()}
-            className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
           >
             Print / Save as PDF
           </button>

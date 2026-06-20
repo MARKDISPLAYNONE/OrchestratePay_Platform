@@ -19,11 +19,13 @@ import AdminMerchantsPage from '../page'
 jest.mock('@/lib/api', () => ({
   admin: {
     getPendingMerchants: jest.fn(),
+    getAllMerchants:      jest.fn(),
     approveMerchant:     jest.fn(),
   },
 }))
 
 const mockGetPendingMerchants = jest.requireMock('@/lib/api').admin.getPendingMerchants as jest.Mock
+const mockGetAllMerchants     = jest.requireMock('@/lib/api').admin.getAllMerchants     as jest.Mock
 const mockApproveMerchant     = jest.requireMock('@/lib/api').admin.approveMerchant     as jest.Mock
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -50,22 +52,26 @@ const merchant2 = {
   approval_status:      'PENDING_REVIEW',
 }
 
-beforeEach(() => jest.clearAllMocks())
+beforeEach(() => {
+  jest.clearAllMocks()
+  mockGetAllMerchants.mockResolvedValue({ merchants: [] })
+})
 
 // ─── Loading state ─────────────────────────────────────────────────────────────
 
 describe('AdminMerchantsPage loading', () => {
   it('shows loading indicator before data resolves', () => {
     mockGetPendingMerchants.mockReturnValue(new Promise(() => {}))
+    mockGetAllMerchants.mockReturnValue(new Promise(() => {}))
     render(<AdminMerchantsPage />)
-    expect(screen.getByText(/loading applications/i)).toBeInTheDocument()
+    expect(screen.getByText(/loading/i)).toBeInTheDocument()
   })
 
   it('removes loading indicator after data resolves', async () => {
     mockGetPendingMerchants.mockResolvedValue({ merchants: [] })
     render(<AdminMerchantsPage />)
     await waitFor(() =>
-      expect(screen.queryByText(/loading applications/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/loading/i)).not.toBeInTheDocument()
     )
   })
 })
@@ -73,11 +79,11 @@ describe('AdminMerchantsPage loading', () => {
 // ─── Page heading ─────────────────────────────────────────────────────────────
 
 describe('AdminMerchantsPage heading', () => {
-  it('renders the "Merchant Applications" heading', async () => {
+  it('renders the "Merchants" heading', async () => {
     mockGetPendingMerchants.mockResolvedValue({ merchants: [] })
     render(<AdminMerchantsPage />)
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /merchant applications/i })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /^merchants$/i })).toBeInTheDocument()
     )
   })
 })

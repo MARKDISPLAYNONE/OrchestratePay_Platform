@@ -26,7 +26,7 @@
  *   - Single-device enforcement for merchants (device_id in JWT + Redis cache)
  *   - All auth events written to server_audit_log (CBK compliance)
  */
-import { Router, Request, Response } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
@@ -36,7 +36,7 @@ import { logger }         from '../util/logger'
 import { validate, loginSchema } from '../middleware/validate'
 import { requireAuth, DEVICE_CACHE_TTL_S } from '../middleware/auth'
 import { deriveMerchantSigningKey } from '../util/nfc-signing'
-import { sendSms, SmsTemplate } from '../integrations/africas-talking'
+import { sendSms } from '../integrations/africas-talking'
 import { writeAuditLog } from '../util/audit'
 
 const router = Router()
@@ -577,7 +577,7 @@ router.post('/consumer/logout', async (req: Request, res: Response) => {
 
 // ─── Admin: merchant approval ─────────────────────────────────────────────────
 
-function requireAdminSecret(req: Request, res: Response, next: Function) {
+function requireAdminSecret(req: Request, res: Response, next: NextFunction) {
   if (req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Admin access required' })
   }
@@ -631,9 +631,7 @@ router.post('/admin/approve/:merchantId', requireAdminSecret, async (req: Reques
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const MERCHANT_ACCESS_TTL_S  = 8  * 60 * 60   // 8 h
-const MERCHANT_REFRESH_TTL_S = 30 * 24 * 60 * 60  // 30 d
 const CONSUMER_ACCESS_TTL_S  = 24 * 60 * 60   // 24 h
-const CONSUMER_REFRESH_TTL_S = 30 * 24 * 60 * 60  // 30 d
 
 function issueMerchantAccessToken(merchantId: string, name: string, deviceId: string): string {
   return jwt.sign(

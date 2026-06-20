@@ -190,7 +190,7 @@ describe('LoyaltyPage points card', () => {
     render(<LoyaltyPage />)
     await waitFor(() => screen.getByText('75%'))
     // The filled inner div has an inline style width
-    const bars = document.querySelectorAll('.bg-green-500.h-2.rounded-full')
+    const bars = document.querySelectorAll('.bg-blue-500.h-2.rounded-full')
     const matchingBar = Array.from(bars).find(
       el => (el as HTMLElement).style.width === '75%'
     )

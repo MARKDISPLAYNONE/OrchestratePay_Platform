@@ -72,7 +72,7 @@ export default function MerchantSettingsPage() {
               placeholder={placeholder}
               value={form[key]}
               onChange={set(key)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         ))}
@@ -85,7 +85,7 @@ export default function MerchantSettingsPage() {
 
         <button
           type="submit" disabled={saving}
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50 transition-colors"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg py-2.5 text-sm disabled:opacity-50 transition-colors"
         >
           {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save changes'}
         </button>
@@ -97,7 +97,7 @@ export default function MerchantSettingsPage() {
         <div className="space-y-2 text-sm text-gray-500">
           <div>To change your email or password, contact support.</div>
           <div>To deactivate your account, contact{' '}
-            <a href="mailto:support@orchestratepay.co.ke" className="text-green-600 hover:underline">
+            <a href="mailto:support@orchestratepay.co.ke" className="text-blue-600 hover:underline">
               support@orchestratepay.co.ke
             </a>
           </div>

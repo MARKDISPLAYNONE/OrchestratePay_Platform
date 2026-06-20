@@ -55,7 +55,7 @@ export default function MerchantDashboard() {
               <XAxis dataKey="day" tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={v => `${(v / 100).toLocaleString()}`} tick={{ fontSize: 11 }} />
               <Tooltip formatter={(v: number) => [`KSh ${(v / 100).toLocaleString()}`, 'Revenue']} />
-              <Bar dataKey="revenue" fill="#16a34a" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="revenue" fill="#2563eb" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -70,7 +70,7 @@ export default function MerchantDashboard() {
               <div className="text-sm font-medium w-28 text-gray-700">{s.source}</div>
               <div className="flex-1 bg-gray-100 rounded-full h-2">
                 <div
-                  className="bg-green-500 h-2 rounded-full"
+                  className="bg-blue-500 h-2 rounded-full"
                   style={{ width: `${s.pct ?? 0}%` }}
                 />
               </div>

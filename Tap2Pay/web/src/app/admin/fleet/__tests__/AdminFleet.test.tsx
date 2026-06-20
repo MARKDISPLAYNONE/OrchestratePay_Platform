@@ -36,7 +36,7 @@ const recentLastSeen = new Date(Date.now() - 2 * 60 * 1000).toISOString()   // 2
 // A device seen a long time ago (always "offline")
 const staleLastSeen  = new Date(Date.now() - 60 * 60 * 1000).toISOString() // 60 min ago
 
-const deviceHealthy: Parameters<typeof Array>[0] = {
+const deviceHealthy = {
   id:               'dev-001',
   device_serial:    'SUNMI-P2-001',
   model:            'Sunmi P2 Pro',

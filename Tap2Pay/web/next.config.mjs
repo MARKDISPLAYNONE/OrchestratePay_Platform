@@ -11,6 +11,17 @@ const nextConfig = {
       },
     ] : []
   },
+
+  // Prevent browsers from caching HTML in dev so stale asset hashes never cause 404s on restart
+  async headers() {
+    if (process.env.NODE_ENV !== 'development') return []
+    return [
+      {
+        source: '/(.*)',
+        headers: [{ key: 'Cache-Control', value: 'no-store' }],
+      },
+    ]
+  },
 }
 
 export default nextConfig

@@ -36,7 +36,7 @@ export default function ConsumerDashboard() {
       </div>
 
       {/* Summary card */}
-      <div className="bg-green-600 text-white rounded-2xl p-6">
+      <div className="bg-blue-600 text-white rounded-2xl p-6">
         <div className="text-sm font-medium opacity-80 mb-1">Total spent</div>
         <div className="text-3xl font-bold">KSh {(totalSpent / 100).toLocaleString()}</div>
         <div className="text-sm opacity-70 mt-1">{confirmed.length} confirmed payments</div>
@@ -66,7 +66,7 @@ export default function ConsumerDashboard() {
                 <div className="text-sm font-semibold text-gray-900">
                   KSh {(t.amount_cents / 100).toLocaleString()}
                 </div>
-                <div className={`text-xs mt-0.5 ${t.status === 'CONFIRMED' ? 'text-green-600' : 'text-gray-400'}`}>
+                <div className={`text-xs mt-0.5 ${t.status === 'CONFIRMED' ? 'text-blue-600' : 'text-gray-400'}`}>
                   {t.status}
                 </div>
               </div>

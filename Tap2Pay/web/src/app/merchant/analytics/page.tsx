@@ -31,7 +31,7 @@ export default function AnalyticsPage() {
               <XAxis dataKey="day" tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={v => `${(v / 100 / 1000).toFixed(0)}K`} tick={{ fontSize: 11 }} />
               <Tooltip formatter={(v: number) => [`KSh ${(v / 100).toLocaleString()}`, 'Revenue']} />
-              <Line type="monotone" dataKey="revenue" stroke="#16a34a" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -47,7 +47,7 @@ export default function AnalyticsPage() {
               <XAxis dataKey="hour" tickFormatter={h => `${h}:00`} tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip labelFormatter={h => `${h}:00–${h}:59`} />
-              <Bar dataKey="count" fill="#16a34a" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="count" fill="#2563eb" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}

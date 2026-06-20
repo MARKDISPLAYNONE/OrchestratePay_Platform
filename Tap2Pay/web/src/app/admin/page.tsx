@@ -116,7 +116,7 @@ export default function AdminDashboard() {
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1">
                     <div
-                      className="w-full bg-green-500 rounded-sm min-h-[2px]"
+                      className="w-full bg-blue-500 rounded-sm min-h-[2px]"
                       style={{ height: `${Math.max(2, pct)}%` }}
                       title={`${h.hour}: ${h.confirmed} confirmed`}
                     />

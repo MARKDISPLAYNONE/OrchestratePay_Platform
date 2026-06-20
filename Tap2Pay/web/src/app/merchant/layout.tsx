@@ -29,8 +29,9 @@ export default function MerchantLayout({ children }: { children: React.ReactNode
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="w-56 bg-gray-900 text-white flex flex-col shrink-0">
-        <div className="px-6 py-5 text-lg font-bold text-green-400 border-b border-gray-800">
+      <aside className="relative w-56 bg-gray-900 text-white flex flex-col shrink-0">
+        <div aria-hidden="true" className="absolute inset-0 pointer-events-none overflow-hidden" style={{ backgroundImage: "url('/pattern.svg')", backgroundRepeat: 'repeat', backgroundSize: '320px 320px', opacity: 0.07 }} />
+        <div className="px-6 py-5 text-lg font-bold text-blue-400 border-b border-gray-800">
           OrchestratePay
         </div>
         <nav className="flex-1 py-4 space-y-1">
@@ -40,7 +41,7 @@ export default function MerchantLayout({ children }: { children: React.ReactNode
               href={href}
               className={`block px-6 py-2.5 text-sm font-medium rounded-r-lg transition-colors
                 ${pathname === href
-                  ? 'bg-green-600 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
             >
               {label}

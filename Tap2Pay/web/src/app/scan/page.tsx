@@ -90,7 +90,7 @@ export default function ConsumerScanPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-start pt-12 px-4">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="text-center mb-6">
-          <div className="text-green-600 font-bold text-xl">OrchestratePay</div>
+          <div className="text-blue-600 font-bold text-xl">OrchestratePay</div>
           <div className="text-gray-500 text-sm mt-1">Tap to Pay</div>
         </div>
 
@@ -120,7 +120,7 @@ export default function ConsumerScanPage() {
             {errorMsg && <p className="text-sm text-red-600">{errorMsg}</p>}
             <button
               onClick={startScan}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl py-4 text-lg transition-colors"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl py-4 text-lg transition-colors"
             >
               Scan Merchant Tag
             </button>

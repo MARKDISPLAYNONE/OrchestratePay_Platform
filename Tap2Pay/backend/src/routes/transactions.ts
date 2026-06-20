@@ -41,9 +41,9 @@ router.use(requireAuth)
 // ─── POST /api/v1/transactions ───────────────────────────────────────────────
 
 router.post('/', validate(transactionSchema), async (req: Request, res: Response) => {
-  const { merchantId, amountCents, source, tagId, nfcUid, idempotencyKey, timestamp,
+  const { merchantId, amountCents, source, tagId, nfcUid, idempotencyKey, _timestamp,
           consumerPhone, hceToken, hceExp, currency = 'KES',
-          deviceType, integrityToken, consumerQrToken, consumerTagId,
+          deviceType, _integrityToken, consumerQrToken, consumerTagId,
           merchantHceToken } = req.body
 
   // Extra security: verify the merchantId in the body matches the JWT
@@ -252,10 +252,12 @@ router.post('/', validate(transactionSchema), async (req: Request, res: Response
   if (!isSupportedCurrency(currency)) {
     return res.status(400).json({ error: `Unsupported currency: ${currency}` })
   }
-  let kesAmountCents: number
-  let fxRate: number
+  let kesAmountCents = 0
+  let fxRate = 0
   try {
-    ;({ kesAmountCents, fxRate } = await convertToKes(amountCents, currency))
+    const converted = await convertToKes(amountCents, currency)
+    kesAmountCents = converted.kesAmountCents
+    fxRate = converted.fxRate
   } catch (fxErr: any) {
     logger.error('FX conversion failed', { currency, amountCents, error: fxErr.message })
     return res.status(503).json({ error: 'Exchange rate unavailable — please try again' })

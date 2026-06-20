@@ -23,7 +23,7 @@ const STATUS_STYLES: Record<string, string> = {
 }
 
 const ACTION_COLORS: Record<Action, string> = {
-  approve: 'bg-green-600 hover:bg-green-700 text-white',
+  approve: 'bg-blue-600 hover:bg-blue-700 text-white',
   reject:  'bg-red-600 hover:bg-red-700 text-white',
   suspend: 'bg-yellow-600 hover:bg-yellow-700 text-white',
 }
@@ -61,7 +61,6 @@ export default function AdminMerchantsPage() {
     try {
       await admin.approveMerchant(merchantId, action, notes[merchantId])
       setPending(prev => prev.filter(m => m.id !== merchantId))
-      await load()
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -143,7 +142,7 @@ export default function AdminMerchantsPage() {
                       placeholder="KYC verified, documents received…"
                       value={notes[m.id] ?? ''}
                       onChange={e => setNotes(prev => ({ ...prev, [m.id]: e.target.value }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
 

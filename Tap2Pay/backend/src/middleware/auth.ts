@@ -48,6 +48,7 @@ export interface ConsumerPayload {
 
 // Extend Express Request to carry decoded principals
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       merchant?: MerchantPayload

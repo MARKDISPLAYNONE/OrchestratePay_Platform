@@ -273,7 +273,7 @@ router.get('/:id', requireMerchantOrConsumer, async (req: Request, res: Response
     }
 
     // Strip internal FK columns before returning
-    const { merchant_id, consumer_id, ...publicDispute } = dispute
+    const { merchant_id: _merchantId, consumer_id: _consumerId, ...publicDispute } = dispute
     return res.json(publicDispute)
   } catch (err: any) {
     logger.error('Failed to fetch dispute', { error: err.message, id, principalId })

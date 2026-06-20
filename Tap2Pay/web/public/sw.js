@@ -9,7 +9,7 @@
  */
 
 const CACHE_NAME = 'orchestratepay-v1'
-const STATIC_ASSETS = ['/', '/auth/login', '/offline.html']
+const STATIC_ASSETS = ['/', '/offline.html']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

@@ -1,6 +1,10 @@
 # ─── Node / Backend ──────────────────────────────────────────────────────────
 node_modules/
 dist/
+
+# ─── Next.js ─────────────────────────────────────────────────────────────────
+Tap2Pay/web/.next/
+Tap2Pay/web/coverage/
 .env
 *.env.local
 npm-debug.log*

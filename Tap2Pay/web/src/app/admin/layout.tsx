@@ -24,11 +24,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (pathname === '/admin/login') return <>{children}</>
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100">
+    <div className="relative min-h-screen bg-gray-900 text-gray-100">
+      {/* Doodle pattern */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 pointer-events-none"
+        style={{ backgroundImage: "url('/pattern.svg')", backgroundRepeat: 'repeat', backgroundSize: '320px 320px', opacity: 0.07 }}
+      />
       {/* Sidebar */}
       <div className="fixed inset-y-0 left-0 w-56 bg-gray-800 border-r border-gray-700 flex flex-col">
         <div className="px-5 py-4 border-b border-gray-700">
-          <div className="font-bold text-green-400 text-lg">OrchestratePay</div>
+          <div className="font-bold text-blue-400 text-lg">OrchestratePay</div>
           <div className="text-xs text-gray-500 mt-0.5">Admin Portal</div>
         </div>
 
@@ -41,7 +47,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={href}
                 className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors
                   ${active
-                    ? 'bg-green-900/50 text-green-400'
+                    ? 'bg-blue-900/50 text-blue-400'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700'
                   }`}
               >

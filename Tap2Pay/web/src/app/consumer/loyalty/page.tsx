@@ -57,7 +57,7 @@ export default function LoyaltyPage() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-green-600">{balance.toLocaleString()}</div>
+                <div className="text-2xl font-bold text-blue-600">{balance.toLocaleString()}</div>
                 <div className="text-xs text-gray-400">{isPoints ? 'pts' : 'stamps'}</div>
               </div>
             </div>
@@ -70,7 +70,7 @@ export default function LoyaltyPage() {
               </div>
               <div className="bg-gray-100 rounded-full h-2">
                 <div
-                  className="bg-green-500 h-2 rounded-full transition-all"
+                  className="bg-blue-500 h-2 rounded-full transition-all"
                   style={{ width: `${pct}%` }}
                 />
               </div>

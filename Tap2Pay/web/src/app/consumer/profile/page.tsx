@@ -62,7 +62,7 @@ export default function ProfilePage() {
             value={displayName}
             onChange={e => setDisplayName(e.target.value)}
             placeholder="e.g. Jane"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -71,7 +71,7 @@ export default function ProfilePage() {
             type="checkbox"
             checked={smsOptIn}
             onChange={e => setSmsOptIn(e.target.checked)}
-            className="w-4 h-4 text-green-600 border-gray-300 rounded"
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded"
           />
           <div>
             <div className="text-sm font-medium text-gray-800">SMS receipts</div>
@@ -89,7 +89,7 @@ export default function ProfilePage() {
 
         <button
           type="submit"
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg py-2.5 text-sm transition-colors"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg py-2.5 text-sm transition-colors"
         >
           {saved ? 'Saved ✓' : 'Save changes'}
         </button>

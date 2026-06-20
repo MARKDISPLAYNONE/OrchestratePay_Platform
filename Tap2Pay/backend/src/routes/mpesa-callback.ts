@@ -81,7 +81,7 @@ async function processCallback(body: any, remoteIp: string | undefined) {
     return
   }
 
-  const { MerchantRequestID, CheckoutRequestID, ResultCode, ResultDesc, CallbackMetadata } = stkCallback
+  const { MerchantRequestID: _mrId, CheckoutRequestID, ResultCode, ResultDesc, CallbackMetadata } = stkCallback
 
   // ── Archive raw callback immediately (7-year CBK compliance) ──────────────
   // Do this before any business logic so we never lose a callback even if

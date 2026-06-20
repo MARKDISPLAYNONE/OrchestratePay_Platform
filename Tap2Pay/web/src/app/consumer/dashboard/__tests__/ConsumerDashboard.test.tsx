@@ -141,26 +141,26 @@ describe('ConsumerDashboard transaction list', () => {
     })
   })
 
-  it('applies green colour class to CONFIRMED status', async () => {
+  it('applies blue colour class to CONFIRMED status', async () => {
     render(<ConsumerDashboard />)
     await waitFor(() => screen.getByText('CONFIRMED'))
     const badge = screen.getByText('CONFIRMED')
-    expect(badge.className).toMatch(/text-green-600/)
+    expect(badge.className).toMatch(/text-blue-600/)
   })
 
-  it('applies a non-green (gray) colour class to PENDING status', async () => {
+  it('applies a non-blue (gray) colour class to PENDING status', async () => {
     render(<ConsumerDashboard />)
     await waitFor(() => screen.getByText('PENDING'))
     const badge = screen.getByText('PENDING')
-    expect(badge.className).not.toMatch(/text-green-600/)
+    expect(badge.className).not.toMatch(/text-blue-600/)
     expect(badge.className).toMatch(/text-gray/)
   })
 
-  it('applies a non-green (gray) colour class to FAILED status', async () => {
+  it('applies a non-blue (gray) colour class to FAILED status', async () => {
     render(<ConsumerDashboard />)
     await waitFor(() => screen.getByText('FAILED'))
     const badge = screen.getByText('FAILED')
-    expect(badge.className).not.toMatch(/text-green-600/)
+    expect(badge.className).not.toMatch(/text-blue-600/)
   })
 })
 
