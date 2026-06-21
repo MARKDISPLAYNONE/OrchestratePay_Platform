@@ -39,6 +39,11 @@ spec:
               value: production
             - name: NEXT_PUBLIC_API_URL
               value: https://api.orchestratepay.co.ke
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: orchestratepay-secrets
+                  key: jwt-secret
           resources:
             requests:
               cpu: 100m

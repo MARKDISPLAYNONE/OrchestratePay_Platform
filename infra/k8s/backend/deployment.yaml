@@ -76,11 +76,21 @@ spec:
                 secretKeyRef:
                   name: orchestratepay-secrets
                   key: daraja-passkey
-            - name: DARAJA_CALLBACK_URL
+            - name: DARAJA_CALLBACK_BASE_URL
               valueFrom:
                 configMapKeyRef:
                   name: orchestratepay-config
                   key: daraja-callback-url
+            - name: ADMIN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: orchestratepay-secrets
+                  key: admin-secret
+            - name: NFC_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: orchestratepay-secrets
+                  key: nfc-signing-secret
             - name: SENTRY_DSN
               valueFrom:
                 secretKeyRef:
