@@ -81,10 +81,10 @@ export async function checkCbkCompliance(
 
     return { allowed: true, limitCents: limit, usedCents }
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Compliance check failures must NOT block payments
     logger.error('CBK compliance check failed — allowing payment', {
-      error: err.message,
+      error: (err as Error).message,
       consumerId,
     })
     return { allowed: true }

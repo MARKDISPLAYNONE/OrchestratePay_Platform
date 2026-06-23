@@ -61,23 +61,23 @@ export async function refreshOAuthToken(params: OAuthTokenParams): Promise<{
       signal: AbortSignal.timeout(10_000),
     })
 
-    const json = await res.json().catch(() => ({})) as any
+    const json = await res.json().catch(() => ({})) as Record<string, unknown>
 
     if (!res.ok || !json.access_token) {
       logger.warn(`${platform} token refresh failed`, { status: res.status, error: json.error })
       return null
     }
 
-    const expiresIn = json.expires_in ?? 3600
+    const expiresIn = (json.expires_in as number | undefined) ?? 3600
     const expiresAt = new Date(Date.now() + expiresIn * 1000)
 
     return {
-      accessToken:  json.access_token,
-      refreshToken: json.refresh_token ?? refreshToken,
+      accessToken:  json.access_token as string,
+      refreshToken: (json.refresh_token as string | undefined) ?? refreshToken,
       expiresAt,
     }
-  } catch (err: any) {
-    logger.error(`${platform} token refresh threw`, { error: err.message })
+  } catch (err: unknown) {
+    logger.error(`${platform} token refresh threw`, { error: (err as Error).message })
     return null
   }
 }

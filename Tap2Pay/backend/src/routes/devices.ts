@@ -27,7 +27,7 @@ const router = Router()
 
 // GET /api/v1/devices — merchant's own registered devices
 router.get('/', requireAuth, async (req, res) => {
-    const merchantId = (req as any).merchant.sub
+    const merchantId = req.merchant!.sub
     const { rows } = await db.query(`
         SELECT
           d.id, d.device_serial, d.model,
@@ -44,7 +44,7 @@ router.get('/', requireAuth, async (req, res) => {
 
 // POST /api/v1/devices/telemetry — authenticated by merchant JWT
 router.post('/telemetry', requireAuth, async (req, res) => {
-    const merchantId = (req as any).merchant.sub
+    const merchantId = req.merchant!.sub
     const {
         deviceSerial, appVersionCode, batteryPct, batteryHealth,
         isCharging, printerStatus, storageFreeBytes, nfcAvailable,
@@ -90,7 +90,17 @@ router.post('/telemetry', requireAuth, async (req, res) => {
     })
 })
 
-async function evaluateAlerts(deviceId: string, merchantId: string, t: any) {
+interface TelemetryPayload {
+    batteryPct?: number
+    batteryHealth?: string
+    isCharging?: boolean
+    printerStatus?: number
+    storageFreeBytes?: number
+    nfcAvailable?: boolean
+    appVersionCode?: number
+}
+
+async function evaluateAlerts(deviceId: string, merchantId: string, t: TelemetryPayload) {
     const alerts: string[] = []
 
     if (typeof t.batteryPct === 'number' && t.batteryPct < 15 && !t.isCharging)

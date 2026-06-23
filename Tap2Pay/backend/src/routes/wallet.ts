@@ -37,9 +37,9 @@ router.post('/session', validate(sessionSchema), async (req: Request, res: Respo
     const maskedPhone = phone.slice(0, 5) + '****' + phone.slice(-2)
     logger.info('HCE session issued', { maskedPhone, exp })
     res.json({ token, exp })
-  } catch (err: any) {
+  } catch (err: unknown) {
     // issueHceToken throws if HCE_TOKEN_SECRET is not set
-    logger.error('Failed to issue HCE session', { error: err.message })
+    logger.error('Failed to issue HCE session', { error: (err as Error).message })
     res.status(503).json({ error: 'Session service temporarily unavailable' })
   }
 })

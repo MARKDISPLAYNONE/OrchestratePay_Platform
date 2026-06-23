@@ -35,10 +35,10 @@ export async function withDistributedLock(
     // NX = only set if not exists, EX = expire after ttlSeconds
     const result = await redis.set(key, token, 'EX', ttlSeconds, 'NX')
     acquired = result === 'OK'
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Redis unavailable — fail open so the job still runs on at least one pod
     logger.warn('Distributed lock: Redis unavailable, running without lock', {
-      lockName, error: err.message,
+      lockName, error: (err as Error).message,
     })
     await fn()
     return true
@@ -59,8 +59,8 @@ export async function withDistributedLock(
       if (current === token) {
         await redis.del(key)
       }
-    } catch (err: any) {
-      logger.warn('Distributed lock: failed to release', { lockName, error: err.message })
+    } catch (err: unknown) {
+      logger.warn('Distributed lock: failed to release', { lockName, error: (err as Error).message })
     }
   }
 }

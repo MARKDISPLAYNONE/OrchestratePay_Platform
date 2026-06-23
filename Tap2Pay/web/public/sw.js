@@ -31,8 +31,8 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Pass through API requests — never cache financial data
-  if (url.pathname.startsWith('/api/')) return
+  // Pass through API requests and Next.js versioned chunks — never cache these
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/_next/')) return
 
   event.respondWith(
     caches.match(request).then(cached => cached ?? fetch(request).catch(() =>

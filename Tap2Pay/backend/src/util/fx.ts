@@ -69,8 +69,8 @@ export async function getRate(currency: Currency): Promise<number> {
       }
       // Stale — try to refresh but return the stale value as safety net below
     }
-  } catch (err: any) {
-    logger.warn('exchange_rates DB read failed — falling back to API', { error: err.message })
+  } catch (err: unknown) {
+    logger.warn('exchange_rates DB read failed — falling back to API', { error: (err as Error).message })
   }
 
   // DB miss or stale — fetch from OpenExchangeRates
@@ -149,8 +149,8 @@ async function fetchFromApi(currency: string): Promise<number | null> {
     logger.info('FX rate fetched from OXR', { currency, rate: kesPerTarget })
     return kesPerTarget
 
-  } catch (err: any) {
-    logger.error('OpenExchangeRates fetch threw', { currency, error: err.message })
+  } catch (err: unknown) {
+    logger.error('OpenExchangeRates fetch threw', { currency, error: (err as Error).message })
     return null
   }
 }
@@ -201,8 +201,8 @@ export async function refreshAllRates(): Promise<number> {
     }
 
     logger.info('FX rates refreshed', { count, currencies: currencies.join(',') })
-  } catch (err: any) {
-    logger.error('Bulk FX rate refresh threw', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Bulk FX rate refresh threw', { error: (err as Error).message })
   }
 
   return count

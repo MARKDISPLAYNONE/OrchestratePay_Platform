@@ -43,8 +43,8 @@ export async function recordLatency(record: LatencyRecord): Promise<void> {
         record.source,
       ]
     )
-  } catch (err: any) {
-    logger.warn('Latency record insert failed', { error: err.message, txnId: record.txnId })
+  } catch (err: unknown) {
+    logger.warn('Latency record insert failed', { error: (err as Error).message, txnId: record.txnId })
   }
 }
 
@@ -82,8 +82,8 @@ export async function getLatencyStats(windowHours = 24): Promise<{
       avgStkConfirmMs:     r.avg_stk     ? Math.round(r.avg_stk)    : null,
       sampleCount:         r.sample_count ?? 0,
     }
-  } catch (err: any) {
-    logger.warn('Latency stats query failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.warn('Latency stats query failed', { error: (err as Error).message })
     return {
       p50TotalMs: null, p95TotalMs: null, p99TotalMs: null,
       avgApiRoundTripMs: null, avgDarajaDispatchMs: null, avgStkConfirmMs: null,

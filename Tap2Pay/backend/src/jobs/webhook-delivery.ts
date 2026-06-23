@@ -93,8 +93,8 @@ export async function runWebhookDeliveryJob(): Promise<void> {
         } finally {
           clearTimeout(timer)
         }
-      } catch (fetchErr: any) {
-        errorMessage = fetchErr.message ?? 'Network error'
+      } catch (fetchErr: unknown) {
+        errorMessage = (fetchErr as Error).message ?? 'Network error'
       }
 
       const success = responseStatus !== null && responseStatus >= 200 && responseStatus < 300
@@ -156,8 +156,8 @@ export async function runWebhookDeliveryJob(): Promise<void> {
 
     logger.info('Webhook delivery job completed', { delivered, failed, retried })
 
-  } catch (err: any) {
-    logger.error('Webhook delivery job failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Webhook delivery job failed', { error: (err as Error).message })
   }
 }
 
@@ -192,12 +192,12 @@ export async function enqueueWebhookEvent(
            VALUES ($1, $2, $3, 'PENDING', 0)`,
           [webhook.id, event, fullPayload]
         )
-      } catch (insertErr: any) {
+      } catch (insertErr: unknown) {
         logger.warn('Failed to enqueue webhook delivery for one webhook', {
           merchantId,
           webhookId: webhook.id,
           event,
-          error: insertErr.message,
+          error: (insertErr as Error).message,
         })
       }
     }
@@ -207,12 +207,12 @@ export async function enqueueWebhookEvent(
       event,
       count: rows.length,
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Fire-and-forget: never propagate errors to the caller
     logger.warn('enqueueWebhookEvent failed silently', {
       merchantId,
       event,
-      error: err.message,
+      error: (err as Error).message,
     })
   }
 }

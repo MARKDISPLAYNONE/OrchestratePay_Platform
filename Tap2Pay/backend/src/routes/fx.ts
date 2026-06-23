@@ -17,7 +17,7 @@ import { logger } from '../util/logger'
 import { writeAuditLog } from '../util/audit'
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET) {
+  if (!process.env.ADMIN_SECRET || req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Admin access required' })
   }
   next()
@@ -44,8 +44,8 @@ router.get('/rates', async (_req: Request, res: Response) => {
       currencies: supported,
       kes:        { currency: 'KES', rate: 1, source: 'fixed', fetchedAt: null, ageMinutes: 0 },
     })
-  } catch (err: any) {
-    logger.error('GET /fx/rates failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('GET /fx/rates failed', { error: (err as Error).message })
     res.status(500).json({ error: 'Could not retrieve exchange rates' })
   }
 })
@@ -65,8 +65,8 @@ adminFxRouter.post('/rates/refresh', requireAdmin, async (req: Request, res: Res
       ip:     req.ip,
     })
     res.json({ ok: true, ratesRefreshed: count })
-  } catch (err: any) {
-    logger.error('Admin FX refresh failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Admin FX refresh failed', { error: (err as Error).message })
     res.status(500).json({ error: 'Rate refresh failed' })
   }
 })

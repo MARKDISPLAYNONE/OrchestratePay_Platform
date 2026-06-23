@@ -55,26 +55,26 @@ describe('GET /api/v1/rails', () => {
 })
 
 describe('POST /api/v1/rails/:method', () => {
-  it('returns 501 for VISA (not yet active)', async () => {
+  it('returns 503 for VISA (not yet active)', async () => {
     const app = buildApp()
     const res = await request(app)
       .post('/api/v1/rails/VISA')
       .set('Authorization', `Bearer ${merchantToken()}`)
       .send({})
 
-    expect(res.status).toBe(501)
-    expect(res.body.error).toMatch(/not yet active/)
+    expect(res.status).toBe(503)
+    expect(res.body.error).toMatch(/not configured/)
     expect(res.body.rail).toBe('VISA')
   })
 
-  it('returns 501 for MASTERCARD (not yet active)', async () => {
+  it('returns 503 for MASTERCARD (not yet active)', async () => {
     const app = buildApp()
     const res = await request(app)
       .post('/api/v1/rails/MASTERCARD')
       .set('Authorization', `Bearer ${merchantToken()}`)
       .send({})
 
-    expect(res.status).toBe(501)
+    expect(res.status).toBe(503)
   })
 
   it('returns redirect instruction for MPESA', async () => {

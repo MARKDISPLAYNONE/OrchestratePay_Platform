@@ -145,7 +145,7 @@ describe('ScanPage confirm state after consumer lookup', () => {
 
     // Override NDEFReader so we can trigger onreading manually
     ;(window as any).NDEFReader = class extends MockNDEFReader {
-      async scan(opts?: any) {
+      async scan(_opts?: any) {
         ndefInstance = this
       }
     }

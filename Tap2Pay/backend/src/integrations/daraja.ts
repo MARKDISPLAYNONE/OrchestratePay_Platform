@@ -25,9 +25,10 @@ const DARAJA_BASE = process.env.DARAJA_ENV === 'production'
   ? 'https://api.safaricom.co.ke'
   : 'https://sandbox.safaricom.co.ke'
 
-const OAUTH_URL   = `${DARAJA_BASE}/oauth/v1/generate?grant_type=client_credentials`
-const STK_URL     = `${DARAJA_BASE}/mpesa/stkpush/v1/processrequest`
-const QUERY_URL   = `${DARAJA_BASE}/mpesa/stkpushquery/v1/query`
+const OAUTH_URL       = `${DARAJA_BASE}/oauth/v1/generate?grant_type=client_credentials`
+const STK_URL         = `${DARAJA_BASE}/mpesa/stkpush/v1/processrequest`
+const QUERY_URL       = `${DARAJA_BASE}/mpesa/stkpushquery/v1/query`
+const B2C_URL         = `${DARAJA_BASE}/mpesa/b2c/v3/paymentrequest`
 const REDIS_TOKEN_KEY = 'daraja:access_token'
 
 // Circuit breaker: open after 5 consecutive Daraja failures, reset after 30s.
@@ -190,7 +191,7 @@ export async function stkPush(req: StkPushRequest): Promise<StkPushResult> {
       }
     })
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof CircuitOpenError) {
       logger.warn('STK Push blocked — Daraja circuit open')
       return {
@@ -198,7 +199,8 @@ export async function stkPush(req: StkPushRequest): Promise<StkPushResult> {
         errorMessage: 'M-Pesa service temporarily unavailable — please try again in 30 seconds'
       }
     }
-    const msg = err.response?.data?.errorMessage || err.message
+    const axiosErr = err as { response?: { data?: { errorMessage?: string } }; message?: string }
+    const msg = axiosErr.response?.data?.errorMessage || axiosErr.message
     logger.error('STK Push API error', { error: msg })
     return { success: false, errorMessage: msg }
   }
@@ -246,13 +248,13 @@ export async function stkQuery(checkoutRequestId: string): Promise<StkQueryResul
       }
     })
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof CircuitOpenError) {
       // Return -1 so the reconciliation job skips this transaction and retries next run
       logger.warn('STK Query blocked — Daraja circuit open', { checkoutRequestId })
       return { resultCode: -1, resultDesc: 'Circuit open — will retry' }
     }
-    logger.error('STK Query error', { checkoutRequestId, error: err.message })
+    logger.error('STK Query error', { checkoutRequestId, error: (err as Error).message })
     return { resultCode: -1, resultDesc: 'Query failed' }
   }
 }
@@ -299,9 +301,10 @@ function maskPhone(phone: string): string {
 }
 
 export interface B2cPayoutRequest {
-  refundId:    string
-  merchantId:  string
-  amountCents: number
+  refundId:       string   // correlation ID (refundId or settlementId)
+  merchantId:     string
+  amountCents:    number
+  recipientPhone: string   // 254XXXXXXXXX — consumer or merchant phone
 }
 
 export interface B2cPayoutResult {
@@ -309,12 +312,80 @@ export interface B2cPayoutResult {
 }
 
 /**
- * initiateB2cPayout — trigger an M-Pesa Business-to-Customer payout for a refund.
+ * initiateB2cPayout — trigger an M-Pesa Business-to-Customer payment.
  *
- * NOT YET IMPLEMENTED. This stub always throws so that the refunds route correctly
- * transitions the refund to FAILED status and returns 502 until B2C credentials
- * and the Daraja B2C endpoint are configured.
+ * Used for both refunds (consumer receives money) and merchant settlements
+ * (merchant M-Pesa account receives float).
+ *
+ * Required env vars:
+ *   DARAJA_B2C_INITIATOR_NAME      — API operator username from Safaricom portal
+ *   DARAJA_B2C_SECURITY_CREDENTIAL — RSA-encrypted initiator password
+ *                                    (generate: openssl rsautl -encrypt -pubin -inkey
+ *                                     SafaricomCert.cer -in plain.txt | base64)
+ *   DARAJA_B2C_RESULT_URL          — HTTPS URL for Safaricom to POST results
+ *   DARAJA_B2C_TIMEOUT_URL         — HTTPS URL for Safaricom to POST timeouts
+ *
+ * Throws if credentials are missing — the caller transitions the record to FAILED.
  */
-export async function initiateB2cPayout(_params: B2cPayoutRequest): Promise<B2cPayoutResult> {
-  throw new Error('initiateB2cPayout is not yet implemented — configure Daraja B2C credentials')
+export async function initiateB2cPayout(params: B2cPayoutRequest): Promise<B2cPayoutResult> {
+  const initiatorName       = process.env.DARAJA_B2C_INITIATOR_NAME
+  const securityCredential  = process.env.DARAJA_B2C_SECURITY_CREDENTIAL
+  const resultUrl           = process.env.DARAJA_B2C_RESULT_URL
+  const timeoutUrl          = process.env.DARAJA_B2C_TIMEOUT_URL
+
+  if (!initiatorName || !securityCredential || !resultUrl || !timeoutUrl) {
+    throw new Error(
+      'B2C payout not configured — set DARAJA_B2C_INITIATOR_NAME, ' +
+      'DARAJA_B2C_SECURITY_CREDENTIAL, DARAJA_B2C_RESULT_URL, DARAJA_B2C_TIMEOUT_URL'
+    )
+  }
+
+  const token = await getAccessToken()
+  const phone = normalisePhone(params.recipientPhone)
+  const amountKes = Math.ceil(params.amountCents / 100)  // M-Pesa takes whole KSh
+
+  // OriginatorConversationID must be unique per request (max 12 chars in sandbox).
+  // We use the first 12 chars of the refundId (UUID without dashes is 32 hex chars).
+  const originatorId = params.refundId.replace(/-/g, '').slice(0, 12)
+
+  logger.info('Initiating B2C payout', {
+    refundId:   params.refundId,
+    merchantId: params.merchantId,
+    phone:      maskPhone(phone),
+    amountKes,
+  })
+
+  const response = await axios.post(B2C_URL, {
+    OriginatorConversationID: originatorId,
+    InitiatorName:            initiatorName,
+    SecurityCredential:       securityCredential,
+    CommandID:                'BusinessPayment',
+    Amount:                   amountKes,
+    PartyA:                   process.env.DARAJA_SHORTCODE,
+    PartyB:                   phone,
+    Remarks:                  `OrchestratePay payout ${params.refundId.slice(0, 8)}`,
+    QueueTimeOutURL:          timeoutUrl,
+    ResultURL:                resultUrl,
+    Occasion:                 '',
+  }, {
+    headers: {
+      Authorization:  `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    timeout: 15_000,
+  })
+
+  const data = response.data
+  if (data.ResponseCode !== '0') {
+    logger.warn('B2C payout rejected by Daraja', { response: data, refundId: params.refundId })
+    throw new Error(`Daraja B2C rejected: ${data.ResponseDescription}`)
+  }
+
+  logger.info('B2C payout accepted by Daraja', {
+    refundId:               params.refundId,
+    originatorConversationId: data.OriginatorConversationID,
+    conversationId:           data.ConversationID,
+  })
+
+  return { requestId: data.OriginatorConversationID ?? originatorId }
 }

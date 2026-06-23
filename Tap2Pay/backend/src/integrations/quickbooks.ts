@@ -22,13 +22,13 @@ export async function postToQuickBooks(
   payload: GlPostingPayload,
   accessToken: string,
   realmId: string,
-  settings: Record<string, any>
+  settings: Record<string, unknown>
 ): Promise<GlPostingResult> {
   const base = process.env.QBO_SANDBOX === 'true' ? QBO_SANDBOX_BASE : QBO_API_BASE
   const url  = `${base}/${realmId}/journalentry`
 
-  const debitAccount  = settings.debitAccount  ?? '57'   // QBO default: A/R account
-  const creditAccount = settings.creditAccount ?? '79'   // QBO default: Sales account
+  const debitAccount  = (settings.debitAccount  as string | undefined) ?? '57'   // QBO default: A/R account
+  const creditAccount = (settings.creditAccount as string | undefined) ?? '79'   // QBO default: Sales account
   const amountKsh     = payload.amountCents / 100
 
   const body = {
@@ -69,7 +69,10 @@ export async function postToQuickBooks(
       signal: AbortSignal.timeout(15_000),
     })
 
-    const json = await res.json().catch(() => ({})) as any
+    const json = await res.json().catch(() => ({})) as {
+      JournalEntry?: { Id?: unknown }
+      Fault?: { Error?: Array<{ Message?: string }> }
+    }
 
     if (res.ok && json?.JournalEntry?.Id) {
       logger.info('QuickBooks journal entry posted', {
@@ -83,9 +86,9 @@ export async function postToQuickBooks(
     logger.warn('QuickBooks posting failed', { txnId: payload.transactionId, error: errMsg })
     return { success: false, error: errMsg }
 
-  } catch (err: any) {
-    logger.error('QuickBooks POST threw', { txnId: payload.transactionId, error: err.message })
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    logger.error('QuickBooks POST threw', { txnId: payload.transactionId, error: (err as Error).message })
+    return { success: false, error: (err as Error).message }
   }
 }
 

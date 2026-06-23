@@ -15,26 +15,26 @@
  * All tests are pure logic — no real DB required.
  */
 
-type TxnStatus = 'PENDING' | 'STK_SENT' | 'CONFIRMED' | 'DECLINED' | 'FAILED' | 'EXPIRED'
+type LedgerTxnStatus = 'PENDING' | 'STK_SENT' | 'CONFIRMED' | 'DECLINED' | 'FAILED' | 'EXPIRED'
 
-const TERMINAL_STATES: TxnStatus[] = ['CONFIRMED', 'DECLINED', 'FAILED', 'EXPIRED']
-const MUTABLE_STATES:  TxnStatus[] = ['PENDING', 'STK_SENT']
+const TERMINAL_STATES: LedgerTxnStatus[] = ['CONFIRMED', 'DECLINED', 'FAILED', 'EXPIRED']
+const MUTABLE_STATES:  LedgerTxnStatus[] = ['PENDING', 'STK_SENT']
 
 // Mirrors the status-update guard used by callbacks and reconciliation:
 // only PENDING and STK_SENT rows can have their STATUS updated.
-function canMutate(currentStatus: TxnStatus): boolean {
+function canMutate(currentStatus: LedgerTxnStatus): boolean {
   return MUTABLE_STATES.includes(currentStatus)
 }
 
 // Amount is frozen the moment the STK push is sent — Daraja has already
 // been called with the original amount. Only PENDING allows amount changes.
-function canChangeAmount(currentStatus: TxnStatus): boolean {
+function canChangeAmount(currentStatus: LedgerTxnStatus): boolean {
   return currentStatus === 'PENDING'
 }
 
 // Attempt to "update" a confirmed transaction via the API.
 // Returns a simulated HTTP response code.
-function attemptAmountUpdate(currentStatus: TxnStatus, newAmountCents: number): number {
+function attemptAmountUpdate(currentStatus: LedgerTxnStatus, newAmountCents: number): number {
   if (!canChangeAmount(currentStatus)) return 409  // Conflict — immutable record
   if (newAmountCents <= 0) return 400              // Bad request
   return 200
@@ -65,8 +65,8 @@ describe('Terminal state immutability — status cannot be rolled back', () => {
 
   // Mirrors the forward-only invariant: the status column may only ever
   // move in one direction through the state machine.
-  function isValidTransition(from: TxnStatus, to: TxnStatus): boolean {
-    const order: Record<TxnStatus, number> = {
+  function isValidTransition(from: LedgerTxnStatus, to: LedgerTxnStatus): boolean {
+    const order: Record<LedgerTxnStatus, number> = {
       PENDING:   0,
       STK_SENT:  1,
       CONFIRMED: 2,
@@ -141,7 +141,7 @@ describe('Immutable ledger — audit log append-only guarantee', () => {
   it('every state transition produces a new audit row (not an update to an existing one)', () => {
     // Simulate a sequence of state changes — each produces an independent entry.
     const auditEntries: string[] = []
-    const transitions: Array<[TxnStatus, TxnStatus]> = [
+    const transitions: Array<[LedgerTxnStatus, LedgerTxnStatus]> = [
       ['PENDING', 'STK_SENT'],
       ['STK_SENT', 'CONFIRMED'],
     ]

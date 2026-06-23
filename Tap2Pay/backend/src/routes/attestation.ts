@@ -53,15 +53,15 @@ router.post('/verify', requireAuth, async (req: Request, res: Response) => {
     logger.info('Device attested via Play Integrity', { merchantId, deviceSerial })
     res.json({ ok: true, attested: true })
 
-  } catch (err: any) {
-    logger.error('Attestation verification threw', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Attestation verification threw', { error: (err as Error).message })
     res.status(500).json({ error: 'Attestation service unavailable' })
   }
 })
 
 async function verifyWithGoogle(
   integrityToken: string,
-  _nonce: string
+  nonce: string
 ): Promise<{ passed: boolean; reason?: string }> {
   const decryptionKey   = process.env.PLAY_INTEGRITY_DECRYPTION_KEY
   const verificationKey = process.env.PLAY_INTEGRITY_VERIFICATION_KEY
@@ -90,10 +90,27 @@ async function verifyWithGoogle(
     return { passed: false, reason: `Google API HTTP ${res.status}` }
   }
 
-  const json = await res.json() as any
+  interface PlayIntegrityVerdict {
+    requestDetails?: { nonce?: string }
+    deviceIntegrity?: { deviceRecognitionVerdict?: string[] }
+    appIntegrity?: { appRecognitionVerdict?: string }
+  }
+  interface PlayIntegrityResponse {
+    tokenPayloadExternal?: PlayIntegrityVerdict
+  }
+  const json = await res.json() as PlayIntegrityResponse
   const verdict = json?.tokenPayloadExternal
 
   if (!verdict) return { passed: false, reason: 'Empty verdict' }
+
+  // Verify nonce binding only when the client provided a nonce — prevents replay attacks.
+  // Clients that don't embed a nonce (e.g. testing) skip this check.
+  if (nonce) {
+    const returnedNonce = verdict?.requestDetails?.nonce
+    if (!returnedNonce || returnedNonce !== nonce) {
+      return { passed: false, reason: 'Nonce mismatch — possible token replay' }
+    }
+  }
 
   // Check device integrity
   const deviceRecognized = verdict?.deviceIntegrity?.deviceRecognitionVerdict?.includes('MEETS_BASIC_INTEGRITY')

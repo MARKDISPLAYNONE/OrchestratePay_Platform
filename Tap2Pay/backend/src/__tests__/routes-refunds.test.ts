@@ -423,9 +423,10 @@ describe('PATCH /api/v1/admin/refunds/:id', () => {
   it('APPROVE: initiates B2C payout and updates to PROCESSING on success', async () => {
     const processingRefund = { ...SAMPLE_REFUND, status: 'PROCESSING', b2c_request_id: 'b2c-req-1' }
     mockQuery
-      .mockResolvedValueOnce({ rows: [SAMPLE_REFUND] })   // SELECT refund
-      .mockResolvedValueOnce({ rows: [] })                 // UPDATE → APPROVED
-      .mockResolvedValueOnce({ rows: [processingRefund] }) // UPDATE → PROCESSING
+      .mockResolvedValueOnce({ rows: [SAMPLE_REFUND] })              // SELECT refund
+      .mockResolvedValueOnce({ rows: [] })                            // UPDATE → APPROVED
+      .mockResolvedValueOnce({ rows: [{ phone: '254712345678' }] })  // SELECT consumer phone
+      .mockResolvedValueOnce({ rows: [processingRefund] })           // UPDATE → PROCESSING
     mockInitiateB2c.mockResolvedValueOnce({ requestId: 'b2c-req-1' })
 
     const res = await request(buildApp())
@@ -438,9 +439,10 @@ describe('PATCH /api/v1/admin/refunds/:id', () => {
     expect(res.body.b2c_request_id).toBe('b2c-req-1')
     expect(mockInitiateB2c).toHaveBeenCalledWith(
       expect.objectContaining({
-        refundId:    REFUND_ID,
-        merchantId:  MERCHANT_ID,
-        amountCents: 5_000,
+        refundId:       REFUND_ID,
+        merchantId:     MERCHANT_ID,
+        amountCents:    5_000,
+        recipientPhone: '254712345678',
       })
     )
   })
@@ -448,9 +450,10 @@ describe('PATCH /api/v1/admin/refunds/:id', () => {
   it('APPROVE: updates to FAILED and returns 502 when B2C payout throws', async () => {
     const failedRefund = { ...SAMPLE_REFUND, status: 'FAILED', notes: 'B2C payout failed: Network error' }
     mockQuery
-      .mockResolvedValueOnce({ rows: [SAMPLE_REFUND] })  // SELECT refund
-      .mockResolvedValueOnce({ rows: [] })                // UPDATE → APPROVED
-      .mockResolvedValueOnce({ rows: [failedRefund] })    // UPDATE → FAILED
+      .mockResolvedValueOnce({ rows: [SAMPLE_REFUND] })              // SELECT refund
+      .mockResolvedValueOnce({ rows: [] })                            // UPDATE → APPROVED
+      .mockResolvedValueOnce({ rows: [{ phone: '254712345678' }] })  // SELECT consumer phone
+      .mockResolvedValueOnce({ rows: [failedRefund] })               // UPDATE → FAILED
     mockInitiateB2c.mockRejectedValueOnce(new Error('Network error'))
 
     const res = await request(buildApp())

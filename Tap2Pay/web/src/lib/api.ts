@@ -89,6 +89,10 @@ export const auth = {
   merchantRegister: (data: {
     name: string; email: string; password: string; phone: string
     businessRegNumber?: string; mpesaShortcode?: string
+    businessType?: string; businessAddressLine1?: string; businessAddressCity?: string
+    natureOfBusiness?: string; expectedMonthlyVolumeCents?: number
+    beneficialOwnerName?: string; beneficialOwnerIdNumber?: string
+    beneficialOwnerOwnershipPct?: number; kraPin?: string
   }) => request<{ merchantId: string; status: string }>('POST', '/api/v1/auth/register', data, { auth: false }),
 
   consumerRegister: (data: { phone: string; email?: string; password?: string; displayName?: string }) =>
@@ -96,6 +100,12 @@ export const auth = {
 
   consumerLogin: (email: string, password: string) =>
     request<{ token: string; consumerId: string }>('POST', '/api/v1/auth/consumer/login', { email, password }, { auth: false }),
+
+  googleLogin: (credential: string, role: 'merchant' | 'consumer', phone?: string) =>
+    request<
+      | { token: string; merchantId?: string; merchantName?: string; consumerId?: string; role: string; expiresAt: number; refreshToken: string }
+      | { needsPhone: true; email: string; displayName: string }
+    >('POST', '/api/v1/auth/google', { credential, role, phone }, { auth: false }),
 }
 
 // ─── Merchant ─────────────────────────────────────────────────────────────────
@@ -206,6 +216,52 @@ export function verifyAdminSecret(secret: string) {
   })
 }
 
+export const settlement = {
+  list: (page = 1, limit = 20) =>
+    request<any>('GET', `/api/v1/settlements?page=${page}&limit=${limit}`),
+
+  get: (id: string) =>
+    request<any>('GET', `/api/v1/settlements/${id}`),
+
+  getAccount: () =>
+    request<any>('GET', '/api/v1/settlements/account/me'),
+
+  setAccount: (body: {
+    accountType: 'MPESA' | 'BANK'
+    mpesaPhone?: string
+    bankName?: string
+    accountNumber?: string
+    accountName?: string
+  }) => request<any>('POST', '/api/v1/settlements/account', body),
+}
+
+export const kyc = {
+  status: () =>
+    request<any>('GET', '/api/v1/kyc/status'),
+
+  documents: () =>
+    request<any>('GET', '/api/v1/kyc/documents'),
+
+  uploadDocument: (body: { docType: string; fileUrl: string; fileName?: string }) =>
+    request<any>('POST', '/api/v1/kyc/documents', body),
+
+  businessDetails: () =>
+    request<{
+      business_type?: string; business_address_line1?: string; business_address_city?: string;
+      nature_of_business?: string; expected_monthly_volume_cents?: number;
+      beneficial_owner_name?: string; beneficial_owner_id_number?: string;
+      beneficial_owner_ownership_pct?: number; kra_pin?: string;
+      sanctions_status?: string; aml_risk_level?: string;
+    }>('GET', '/api/v1/kyc/business-details'),
+
+  updateBusinessDetails: (data: {
+    businessType?: string; businessAddressLine1?: string; businessAddressCity?: string;
+    natureOfBusiness?: string; expectedMonthlyVolumeCents?: number;
+    beneficialOwnerName?: string; beneficialOwnerIdNumber?: string;
+    beneficialOwnerOwnershipPct?: number; kraPin?: string;
+  }) => request<Record<string, unknown>>('PUT', '/api/v1/kyc/business-details', data),
+}
+
 export const admin = {
   getStats: () =>
     request<any>('GET', '/api/v1/admin/stats', undefined, { auth: false, adminAuth: true }),
@@ -227,4 +283,18 @@ export const admin = {
 
   getFleetAlerts: () =>
     request<any>('GET', '/api/v1/admin/fleet/alerts?unresolved', undefined, { auth: false, adminAuth: true }),
+
+  amlFlags: (status?: string) =>
+    request<Array<{
+      id: string; flag_type: string; status: string; details: Record<string, unknown>;
+      created_at: string; merchant_name?: string; merchant_email?: string;
+    }>>('GET', `/api/v1/admin/aml/flags${status ? `?status=${status}` : ''}`, undefined, { adminAuth: true }),
+
+  updateAmlFlag: (flagId: string, data: { status: string; reviewedBy?: string; notes?: string }) =>
+    request<{ id: string; status: string }>('PATCH', `/api/v1/admin/aml/flags/${flagId}`, data, { adminAuth: true }),
+
+  screenMerchant: (merchantId: string) =>
+    request<{ status: string; matches: string[]; riskLevel: string; reasons: string[] }>(
+      'POST', `/api/v1/admin/kyc/${merchantId}/screen`, {}, { adminAuth: true }
+    ),
 }

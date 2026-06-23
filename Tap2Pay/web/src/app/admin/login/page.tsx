@@ -1,7 +1,7 @@
 'use client'
 import { useState }            from 'react'
 import { useRouter }           from 'next/navigation'
-import { saveAdminSecret, clearAdminSecret, verifyAdminSecret } from '@/lib/api'
+import { saveAdminSecret, verifyAdminSecret } from '@/lib/api'
 
 export default function AdminLoginPage() {
   const router = useRouter()

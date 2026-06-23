@@ -124,12 +124,12 @@ export async function runSubscriptionBillingJob(): Promise<void> {
           phone:        maskPhone(enrollment.consumer_phone),
           amountCents:  enrollment.amount_cents,
         })
-      } catch (enrollmentErr: any) {
+      } catch (enrollmentErr: unknown) {
         // Per-enrollment error: log and continue to next subscriber
         failed++
         logger.error('Subscription billing: error processing enrollment', {
           enrollmentId: enrollment.enrollment_id,
-          error:        enrollmentErr.message,
+          error:        (enrollmentErr as Error).message,
         })
       }
     }
@@ -138,8 +138,8 @@ export async function runSubscriptionBillingJob(): Promise<void> {
     logger.info('Subscription billing job completed', {
       processed, succeeded, failed, durationMs,
     })
-  } catch (err: any) {
-    logger.error('Subscription billing job failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Subscription billing job failed', { error: (err as Error).message })
   }
 }
 
@@ -166,8 +166,8 @@ export async function runTrialExpiry(): Promise<void> {
     } else {
       logger.info('Trial expiry: no expired trials found')
     }
-  } catch (err: any) {
-    logger.error('Trial expiry job failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Trial expiry job failed', { error: (err as Error).message })
   }
 }
 

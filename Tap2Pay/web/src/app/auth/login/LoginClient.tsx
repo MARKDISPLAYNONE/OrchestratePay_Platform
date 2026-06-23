@@ -1,21 +1,35 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google'
 import { auth } from '@/lib/api'
 import { saveToken } from '@/lib/auth'
 
 type Mode = 'merchant' | 'consumer'
 
+interface GooglePending {
+  credential: string
+  email: string
+  displayName: string
+}
+
 export default function LoginClient() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const registered = searchParams.get('registered') === '1'
+  const kycRedirect = searchParams.get('kyc') === '1'
   const [mode, setMode]         = useState<Mode>('merchant')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
+
+  // Google sign-in: phone collection state for new consumers
+  const [googlePending, setGooglePending] = useState<GooglePending | null>(null)
+  const [googlePhone, setGooglePhone]     = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -34,6 +48,41 @@ export default function LoginClient() {
     } catch (err: any) {
       setError(err.message)
     } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleGoogleSuccess(credentialResponse: CredentialResponse) {
+    if (!credentialResponse.credential) return
+    setError('')
+    setLoading(true)
+    try {
+      const res = await auth.googleLogin(credentialResponse.credential, mode)
+      if ('needsPhone' in res) {
+        setGooglePending({ credential: credentialResponse.credential, email: res.email, displayName: res.displayName })
+        setLoading(false)
+        return
+      }
+      saveToken(res.token, mode === 'consumer')
+      router.push(mode === 'merchant' ? '/merchant/dashboard' : '/consumer/dashboard')
+    } catch (err: any) {
+      setError(err.message)
+      setLoading(false)
+    }
+  }
+
+  async function handleGooglePhoneSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!googlePending) return
+    setError('')
+    setLoading(true)
+    try {
+      const res = await auth.googleLogin(googlePending.credential, 'consumer', googlePhone)
+      if ('needsPhone' in res) { setError('Phone required'); setLoading(false); return }
+      saveToken(res.token, true)
+      router.push('/consumer/dashboard')
+    } catch (err: any) {
+      setError(err.message)
       setLoading(false)
     }
   }
@@ -111,6 +160,16 @@ export default function LoginClient() {
             <Image src="/icons/Icon.png" alt="Tap2Pay" width={96} height={96} className="rounded-2xl" priority />
             <p className="mt-3 text-sm text-blue-400/70 tracking-wide">Sign in to your account</p>
           </div>
+
+          {/* Registration / KYC success message */}
+          {registered && (
+            <div className="mb-5 rounded-xl px-4 py-3 text-sm text-center"
+              style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
+              {kycRedirect
+                ? <span className="text-green-400">Account created! Please log in to complete your KYC verification.</span>
+                : <span className="text-green-400">Account created! Please sign in to continue.</span>}
+            </div>
+          )}
 
           {/* Mode toggle */}
           <div className="relative flex bg-white/5 rounded-xl p-1 mb-6">
@@ -206,7 +265,82 @@ export default function LoginClient() {
             </button>
           </form>
 
+          {/* ── Google sign-in — only rendered when provider is configured ── */}
+          {!googlePending && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+            <div className="mt-5">
+              <div className="flex items-center gap-3 my-1">
+                <div className="flex-1 h-px bg-white/[0.07]" />
+                <span className="text-xs text-slate-600 select-none">or</span>
+                <div className="flex-1 h-px bg-white/[0.07]" />
+              </div>
+              <div className="mt-4 flex justify-center">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setError('Google sign-in failed — please try again')}
+                  theme="filled_black"
+                  shape="rectangular"
+                  size="large"
+                  text="continue_with"
+                  width="288"
+                  useOneTap={false}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── Phone collection for new Google consumers ──────────────── */}
+          {googlePending && (
+            <form onSubmit={handleGooglePhoneSubmit} className="mt-5 space-y-4">
+              <div
+                className="rounded-xl px-4 py-3 text-sm"
+                style={{ background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(59,130,246,0.25)' }}
+              >
+                <p className="text-slate-300 font-medium">{googlePending.displayName}</p>
+                <p className="text-slate-500 text-xs mt-0.5">{googlePending.email}</p>
+              </div>
+              <p className="text-xs text-slate-400">
+                Enter your M-Pesa phone number to complete sign-up. You&apos;ll receive payment prompts on this number.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5 tracking-widest uppercase">M-Pesa Phone</label>
+                <input
+                  type="tel" required autoFocus
+                  value={googlePhone}
+                  onChange={e => setGooglePhone(e.target.value.replace(/\D/g, ''))}
+                  placeholder="254712345678"
+                  className="w-full rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600
+                    bg-white/[0.04] border border-white/10
+                    focus:outline-none focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/[0.15] transition-all"
+                />
+              </div>
+              {error && (
+                <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5">
+                  {error}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setGooglePending(null); setGooglePhone(''); setError('') }}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-400 rounded-xl border border-white/10 hover:border-white/20 hover:text-slate-300 transition-all"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit" disabled={loading}
+                  className="flex-1 py-2.5 text-sm font-semibold text-white rounded-xl
+                    bg-gradient-to-r from-blue-600 to-blue-700
+                    hover:from-blue-500 hover:to-blue-600
+                    disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  {loading ? 'Creating account…' : 'Create account'}
+                </button>
+              </div>
+            </form>
+          )}
+
           {/* Register link */}
+          {!googlePending && (
           <div className="mt-6 text-center text-sm text-slate-500">
             {mode === 'merchant' ? (
               <p>New merchant?{' '}
@@ -218,6 +352,7 @@ export default function LoginClient() {
               </p>
             )}
           </div>
+          )}
 
           <div className="mt-4 pt-4 border-t border-white/[0.06] text-center">
             <Link href="/admin/login" className="text-xs text-slate-600 hover:text-slate-400 tracking-wide transition-colors">

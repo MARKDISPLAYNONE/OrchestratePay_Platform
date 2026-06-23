@@ -82,8 +82,8 @@ router.post('/', requireAuth, validate(createKeySchema), async (req: Request, re
       expiresAt: row.expires_at,
       createdAt: row.created_at,
     })
-  } catch (err: any) {
-    logger.error('Failed to create API key', { error: err.message, merchantId })
+  } catch (err: unknown) {
+    logger.error('Failed to create API key', { error: (err as Error).message, merchantId })
     return res.status(500).json({ error: 'Failed to create API key' })
   }
 })
@@ -112,8 +112,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
         createdAt:  r.created_at,
       })),
     })
-  } catch (err: any) {
-    logger.error('Failed to list API keys', { error: err.message, merchantId })
+  } catch (err: unknown) {
+    logger.error('Failed to list API keys', { error: (err as Error).message, merchantId })
     return res.status(500).json({ error: 'Failed to list API keys' })
   }
 })
@@ -139,8 +139,8 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
 
     logger.info('API key revoked', { merchantId, keyId })
     return res.json({ revoked: true })
-  } catch (err: any) {
-    logger.error('Failed to revoke API key', { error: err.message, merchantId, keyId })
+  } catch (err: unknown) {
+    logger.error('Failed to revoke API key', { error: (err as Error).message, merchantId, keyId })
     return res.status(500).json({ error: 'Failed to revoke API key' })
   }
 })
@@ -172,8 +172,8 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
       expiresAt:  r.expires_at,
       createdAt:  r.created_at,
     })
-  } catch (err: any) {
-    logger.error('Failed to fetch API key', { error: err.message, merchantId, keyId })
+  } catch (err: unknown) {
+    logger.error('Failed to fetch API key', { error: (err as Error).message, merchantId, keyId })
     return res.status(500).json({ error: 'Failed to fetch API key' })
   }
 })

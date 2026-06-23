@@ -60,8 +60,8 @@ export async function scoreFraud(input: FraudInput): Promise<FraudResult> {
       score += velocityScore
       reasons.push(`velocity:${count}_txns_in_${VELOCITY_WINDOW_S}s`)
     }
-  } catch (err: any) {
-    logger.warn('Fraud velocity check skipped (Redis error)', { error: err.message })
+  } catch (err: unknown) {
+    logger.warn('Fraud velocity check skipped (Redis error)', { error: (err as Error).message })
   }
 
   // ── Rule 2: Amount deviation from merchant 30-day average ────────────────
@@ -83,8 +83,8 @@ export async function scoreFraud(input: FraudInput): Promise<FraudResult> {
         reasons.push(`amount_deviation:${factor.toFixed(1)}x_merchant_avg`)
       }
     }
-  } catch (err: any) {
-    logger.warn('Fraud amount deviation check skipped (DB error)', { error: err.message })
+  } catch (err: unknown) {
+    logger.warn('Fraud amount deviation check skipped (DB error)', { error: (err as Error).message })
   }
 
   // ── Rule 3: High absolute amount on first-time consumer ──────────────────
@@ -101,8 +101,8 @@ export async function scoreFraud(input: FraudInput): Promise<FraudResult> {
         score += 25
         reasons.push(`high_amount_first_transaction:${input.amountCents}cents`)
       }
-    } catch (err: any) {
-      logger.warn('Fraud first-transaction check skipped (DB error)', { error: err.message })
+    } catch (err: unknown) {
+      logger.warn('Fraud first-transaction check skipped (DB error)', { error: (err as Error).message })
     }
   }
 

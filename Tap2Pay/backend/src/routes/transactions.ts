@@ -32,6 +32,7 @@ import { scoreFraud } from '../util/fraud'
 import { checkCbkCompliance } from '../util/cbk-compliance'
 import { recordLatency, parseTapTimestamp } from '../util/latency-tracker'
 import { logger } from '../util/logger'
+import { checkMerchantLimits } from '../util/merchant-limits'
 
 const router = Router()
 
@@ -43,7 +44,7 @@ router.use(requireAuth)
 router.post('/', validate(transactionSchema), async (req: Request, res: Response) => {
   const { merchantId, amountCents, source, tagId, nfcUid, idempotencyKey, _timestamp,
           consumerPhone, hceToken, hceExp, currency = 'KES',
-          deviceType, _integrityToken, consumerQrToken, consumerTagId,
+          deviceType, consumerQrToken, consumerTagId,
           merchantHceToken } = req.body
 
   // Extra security: verify the merchantId in the body matches the JWT
@@ -91,6 +92,24 @@ router.post('/', validate(transactionSchema), async (req: Request, res: Response
     return res.status(403).json({
       error:  'Merchant account is not approved for transactions',
       status: merchant.approval_status,
+    })
+  }
+
+  // ─── Merchant KYC/AML limit check ─────────────────────────────────────────
+  // Enforces per-merchant daily/monthly spend limits by KYC tier, and blocks
+  // sanctioned merchants. Fail-safe: DB errors allow the payment through.
+  const merchantLimitCheck = await checkMerchantLimits(merchantId, amountCents)
+  if (!merchantLimitCheck.allowed) {
+    logger.warn('Merchant transaction blocked by limits', {
+      merchantId,
+      reason: merchantLimitCheck.reason,
+      code:   merchantLimitCheck.code,
+    })
+    return res.status(403).json({
+      error:      merchantLimitCheck.reason,
+      code:       merchantLimitCheck.code,
+      limitCents: merchantLimitCheck.limitCents,
+      usedCents:  merchantLimitCheck.usedCents,
     })
   }
 
@@ -258,8 +277,8 @@ router.post('/', validate(transactionSchema), async (req: Request, res: Response
     const converted = await convertToKes(amountCents, currency)
     kesAmountCents = converted.kesAmountCents
     fxRate = converted.fxRate
-  } catch (fxErr: any) {
-    logger.error('FX conversion failed', { currency, amountCents, error: fxErr.message })
+  } catch (fxErr: unknown) {
+    logger.error('FX conversion failed', { currency, amountCents, error: (fxErr as Error).message })
     return res.status(503).json({ error: 'Exchange rate unavailable — please try again' })
   }
 
@@ -380,14 +399,14 @@ router.post('/', validate(transactionSchema), async (req: Request, res: Response
        WHERE id = $3`,
       [stkResult.checkoutRequestId, stkResult.merchantRequestId, txnId]
     )
-  } catch (updateErr: any) {
+  } catch (updateErr: unknown) {
     // STK Push succeeded but we failed to record the checkout_request_id.
     // Log at ERROR with all identifiers so ops can manually link this transaction.
     logger.error('CRITICAL: Failed to store checkout_request_id after successful STK Push — MANUAL RECONCILIATION REQUIRED', {
       txnId,
       checkoutRequestId: stkResult.checkoutRequestId,
       merchantRequestId: stkResult.merchantRequestId,
-      error: updateErr.message,
+      error: (updateErr as Error).message,
     })
     // Return 201 anyway — the consumer was sent an STK Push. The payment may confirm
     // via callback (using CheckoutRequestID) even if our local status is stale.
@@ -419,8 +438,8 @@ router.post('/', validate(transactionSchema), async (req: Request, res: Response
     stkConfirmMs: null,
     totalMs:      null,
     source,
-  }).catch((err: any) =>
-    logger.warn('Failed to record tap latency', { txnId, error: err.message })
+  }).catch((err: unknown) =>
+    logger.warn('Failed to record tap latency', { txnId, error: (err as Error).message })
   )
 
   res.status(201).json(pendingResponse)

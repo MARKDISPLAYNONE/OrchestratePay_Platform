@@ -71,8 +71,9 @@ export async function sendSms(to: string, message: string): Promise<SmsResult> {
             signal: AbortSignal.timeout(8_000),
         })
 
-        const json = await response.json().catch(() => ({})) as any
-        const entry = json?.SMSMessageData?.Recipients?.[0]
+        const json = await response.json().catch(() => ({})) as Record<string, unknown>
+        const smsData = (json?.SMSMessageData as { Recipients?: Array<{ status?: string; messageId?: string }> } | undefined)
+        const entry = smsData?.Recipients?.[0]
 
         if (response.ok && entry?.status === 'Success') {
             logger.info('SMS sent', { to: maskPhone(to), messageId: entry.messageId })
@@ -83,9 +84,9 @@ export async function sendSms(to: string, message: string): Promise<SmsResult> {
         logger.warn('SMS delivery failed', { to: maskPhone(to), error })
         return { success: false, error }
 
-    } catch (err: any) {
-        logger.error('SMS send threw', { to: maskPhone(to), error: err.message })
-        return { success: false, error: err.message }
+    } catch (err: unknown) {
+        logger.error('SMS send threw', { to: maskPhone(to), error: (err as Error).message })
+        return { success: false, error: (err as Error).message }
     }
 }
 
@@ -104,6 +105,20 @@ export const SmsTemplate = {
 
     digitalReceipt: (amountKsh: number, merchantName: string, mpesaRef: string, date: string) =>
         `OrchestratePay Receipt\nMerchant: ${merchantName}\nAmount: KSh ${amountKsh.toFixed(2)}\nRef: ${mpesaRef}\nDate: ${date}\nPowered by OrchestratePay`,
+
+    kycApproved: (merchantName: string) =>
+        `OrchestratePay: Great news! Your merchant account "${merchantName}" has been approved. Login to start accepting NFC payments: https://pay.orchestratepay.co.ke`,
+
+    kycRejected: (merchantName: string, reason: string) =>
+        `OrchestratePay: KYC verification for "${merchantName}" was unsuccessful. Reason: ${reason}. Please login to resubmit documents or contact support@orchestratepay.co.ke`,
+
+    kycUnderReview: (merchantName: string) =>
+        `OrchestratePay: We've received your KYC documents for "${merchantName}" and they are under review. Expect a response within 1-2 business days.`,
+
+    kycDocsReceived: (merchantName: string, missingCount: number) =>
+        missingCount > 0
+            ? `OrchestratePay: Document received for "${merchantName}". You still have ${missingCount} required document(s) to submit. Login to complete KYC.`
+            : `OrchestratePay: All required KYC documents received for "${merchantName}"! Our team will review shortly.`,
 }
 
 function maskPhone(phone: string): string {

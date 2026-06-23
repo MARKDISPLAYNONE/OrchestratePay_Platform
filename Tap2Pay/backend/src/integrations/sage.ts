@@ -15,7 +15,7 @@ export async function postToSage(
   payload: GlPostingPayload,
   accessToken: string,
   _realmId: string,
-  settings: Record<string, any>
+  settings: Record<string, unknown>
 ): Promise<GlPostingResult> {
   const url = `${SAGE_API_BASE}/journals`
 
@@ -56,7 +56,7 @@ export async function postToSage(
       signal: AbortSignal.timeout(15_000),
     })
 
-    const json = await res.json().catch(() => ({})) as any
+    const json = await res.json().catch(() => ({})) as { id?: unknown; message?: string }
 
     if (res.ok && json?.id) {
       logger.info('Sage journal posted', {
@@ -70,9 +70,9 @@ export async function postToSage(
     logger.warn('Sage posting failed', { txnId: payload.transactionId, error: errMsg })
     return { success: false, error: errMsg }
 
-  } catch (err: any) {
-    logger.error('Sage POST threw', { txnId: payload.transactionId, error: err.message })
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    logger.error('Sage POST threw', { txnId: payload.transactionId, error: (err as Error).message })
+    return { success: false, error: (err as Error).message }
   }
 }
 

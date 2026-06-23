@@ -30,6 +30,10 @@ export type AuditEvent =
   | 'TRANSACTION_EXPIRED'
   | 'RECONCILIATION_RUN'
   | 'ADMIN_ACTION'
+  | 'KYC_APPROVED'
+  | 'KYC_REJECTED'
+  | 'SETTLEMENT_COMPLETED'
+  | 'SETTLEMENT_FAILED'
 
 export interface AuditParams {
   event:      AuditEvent
@@ -52,8 +56,8 @@ export async function writeAuditLog(params: AuditParams): Promise<void> {
         params.ip         ?? null,
       ]
     )
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Non-fatal — log and continue
-    logger.error('Audit log write failed', { event: params.event, error: err.message })
+    logger.error('Audit log write failed', { event: params.event, error: (err as Error).message })
   }
 }

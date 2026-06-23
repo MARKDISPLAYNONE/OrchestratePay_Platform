@@ -19,12 +19,12 @@ export async function postToXero(
   payload: GlPostingPayload,
   accessToken: string,
   tenantId: string,
-  settings: Record<string, any>
+  settings: Record<string, unknown>
 ): Promise<GlPostingResult> {
   const url = `${XERO_API_BASE}/ManualJournals`
 
-  const debitCode  = settings.debitAccountCode  ?? '200'
-  const creditCode = settings.creditAccountCode ?? '400'
+  const debitCode  = (settings.debitAccountCode  as string | undefined) ?? '200'
+  const creditCode = (settings.creditAccountCode as string | undefined) ?? '400'
   const amountKsh  = payload.amountCents / 100
 
   const body = {
@@ -57,7 +57,10 @@ export async function postToXero(
       signal: AbortSignal.timeout(15_000),
     })
 
-    const json = await res.json().catch(() => ({})) as any
+    const json = await res.json().catch(() => ({})) as {
+      ManualJournals?: Array<{ ManualJournalID?: string }>
+      Elements?: Array<{ ValidationErrors?: Array<{ Message?: string }> }>
+    }
     const entry = json?.ManualJournals?.[0]
 
     if (res.ok && entry?.ManualJournalID) {
@@ -72,9 +75,9 @@ export async function postToXero(
     logger.warn('Xero posting failed', { txnId: payload.transactionId, error: errMsg })
     return { success: false, error: errMsg }
 
-  } catch (err: any) {
-    logger.error('Xero PUT threw', { txnId: payload.transactionId, error: err.message })
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    logger.error('Xero PUT threw', { txnId: payload.transactionId, error: (err as Error).message })
+    return { success: false, error: (err as Error).message }
   }
 }
 

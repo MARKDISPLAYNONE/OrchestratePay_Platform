@@ -2,16 +2,30 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import LoginClient from '../LoginClient'
 
+// GoogleLogin is conditionally rendered based on this env var
+process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = 'test-client-id'
+
 const mockPush = jest.fn()
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => ({ get: () => null }),
+}))
+
+jest.mock('@react-oauth/google', () => ({
+  GoogleLogin: ({ onSuccess }: { onSuccess?: (res: unknown) => void }) => (
+    <button onClick={() => onSuccess?.({ credential: 'test-credential' })}>
+      Sign in with Google
+    </button>
+  ),
+  useGoogleOAuth: () => ({}),
 }))
 
 jest.mock('@/lib/api', () => ({
   auth: {
     merchantLogin: jest.fn(),
     consumerLogin:  jest.fn(),
+    googleLogin:    jest.fn(),
   },
 }))
 
@@ -21,6 +35,7 @@ jest.mock('@/lib/auth', () => ({
 
 const mockMerchantLogin = jest.requireMock('@/lib/api').auth.merchantLogin as jest.Mock
 const mockConsumerLogin  = jest.requireMock('@/lib/api').auth.consumerLogin  as jest.Mock
+const mockGoogleLogin    = jest.requireMock('@/lib/api').auth.googleLogin    as jest.Mock
 const mockSaveToken      = jest.requireMock('@/lib/auth').saveToken            as jest.Mock
 
 function emailInput()    { return document.querySelector('input[type="email"]')    as HTMLInputElement }
@@ -182,5 +197,43 @@ describe('LoginClient', () => {
     await userEvent.type(passwordInput(), 'wrong1!')
     await userEvent.click(screen.getByRole('button', { name: /^sign in$/i }))
     await waitFor(() => expect(screen.getByRole('button', { name: /^sign in$/i })).not.toBeDisabled())
+  })
+
+  // ── Google OAuth ──────────────────────────────────────────────────────────
+
+  it('redirects to merchant dashboard on successful Google sign-in', async () => {
+    mockGoogleLogin.mockResolvedValue({ token: 'g-tok', merchantId: 'mid', merchantName: 'G Merchant' })
+    render(<LoginClient />)
+    await userEvent.click(screen.getByRole('button', { name: /sign in with google/i }))
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/merchant/dashboard'))
+    expect(mockSaveToken).toHaveBeenCalledWith('g-tok', false)
+  })
+
+  it('shows phone collection form when Google login requires phone', async () => {
+    mockGoogleLogin.mockResolvedValue({ needsPhone: true, email: 'g@test.com', displayName: 'G User' })
+    render(<LoginClient />)
+    await userEvent.click(screen.getByRole('button', { name: /sign in with google/i }))
+    await waitFor(() => expect(screen.getByText('G User')).toBeInTheDocument())
+    expect(screen.getByPlaceholderText('254712345678')).toBeInTheDocument()
+  })
+
+  it('submits phone and redirects on Google consumer sign-up', async () => {
+    mockGoogleLogin
+      .mockResolvedValueOnce({ needsPhone: true, email: 'g@test.com', displayName: 'G User' })
+      .mockResolvedValueOnce({ token: 'g-consumer-tok', consumerId: 'cid' })
+    render(<LoginClient />)
+    await userEvent.click(screen.getByRole('button', { name: /sign in with google/i }))
+    await waitFor(() => screen.getByPlaceholderText('254712345678'))
+    await userEvent.type(screen.getByPlaceholderText('254712345678'), '254712345678')
+    await userEvent.click(screen.getByRole('button', { name: /^create account$/i }))
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/consumer/dashboard'))
+    expect(mockSaveToken).toHaveBeenCalledWith('g-consumer-tok', true)
+  })
+
+  it('shows error when Google sign-in fails', async () => {
+    mockGoogleLogin.mockRejectedValue(new Error('Google auth failed'))
+    render(<LoginClient />)
+    await userEvent.click(screen.getByRole('button', { name: /sign in with google/i }))
+    await waitFor(() => expect(screen.getByText(/google auth failed/i)).toBeInTheDocument())
   })
 })

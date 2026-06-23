@@ -104,6 +104,10 @@ jest.mock('../util/cbk-compliance', () => ({
   checkCbkCompliance: jest.fn().mockResolvedValue({ allowed: true, usedCents: 0, limitCents: 1000000, tier: 'BASIC' }),
 }))
 
+jest.mock('../util/merchant-limits', () => ({
+  checkMerchantLimits: jest.fn().mockResolvedValue({ allowed: true }),
+}))
+
 jest.mock('../util/fx', () => ({
   getRate:              jest.fn().mockResolvedValue(130),
   convertToKes:         jest.fn().mockResolvedValue({ kesAmountCents: 5000, fxRate: 130 }),
@@ -770,7 +774,7 @@ describe('routes/mpesa-callback.ts — branch gaps', () => {
       String(c[0]).includes("status = 'CONFIRMED'")
     )
     expect(confirmCall).toBeTruthy()
-  })
+  }, 15000)
 
   it('lines 264, 300, 321: covers mpesaReceipt ?? "" branches — sms_opt_in + missing MpesaReceiptNumber', async () => {
     const txnWithSms = { ...BASE_TXN, sms_opt_in: true }

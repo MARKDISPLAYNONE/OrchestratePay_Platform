@@ -80,6 +80,8 @@ describe('GET /api/v1/admin/stats', () => {
       .mockResolvedValueOnce({ rows: [            // hourly
         { hour: new Date(), total: '10', confirmed: '8' },
       ] })
+      .mockResolvedValueOnce({ rows: [{ count: '42' }] })  // merchantCount
+      .mockResolvedValueOnce({ rows: [{ count: '15' }] })  // consumerCount
 
     const res = await request(buildApp())
       .get('/api/v1/admin/stats')
@@ -107,6 +109,8 @@ describe('GET /api/v1/admin/stats', () => {
       .mockResolvedValueOnce({ rows: [countRow] })
       .mockResolvedValueOnce({ rows: [timingRow] })
       .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
 
     const res = await request(buildApp())
       .get('/api/v1/admin/stats')
@@ -137,6 +141,8 @@ describe('GET /api/v1/admin/stats', () => {
       .mockResolvedValueOnce({ rows: [emptyRow] })
       .mockResolvedValueOnce({ rows: [timingRow] })
       .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
 
     const res = await request(buildApp())
       .get('/api/v1/admin/stats')

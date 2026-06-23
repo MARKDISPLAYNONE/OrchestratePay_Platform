@@ -78,7 +78,7 @@ async function postToEtims(invoice: EtimsInvoice): Promise<EtimsResult> {
 
     return {
         success:       true,
-        invoiceNumber: (raw as any).invoiceNumber ?? `ETIMS-${Date.now()}`,
+        invoiceNumber: (raw as { invoiceNumber?: string }).invoiceNumber ?? `ETIMS-${Date.now()}`,
         rawResponse:   raw,
     }
 }

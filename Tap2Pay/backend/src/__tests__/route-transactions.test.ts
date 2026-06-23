@@ -63,6 +63,11 @@ jest.mock('../util/cbk-compliance', () => ({
   checkCbkCompliance: (...args: any[]) => mockCheckCbkCompliance(...args),
 }))
 
+const mockCheckMerchantLimits = jest.fn()
+jest.mock('../util/merchant-limits', () => ({
+  checkMerchantLimits: (...args: any[]) => mockCheckMerchantLimits(...args),
+}))
+
 jest.mock('../util/latency-tracker', () => ({
   recordLatency:     jest.fn().mockResolvedValue(undefined),
   parseTapTimestamp: jest.fn().mockReturnValue(null),
@@ -125,6 +130,7 @@ beforeEach(() => {
   mockIsSupportedCurrency.mockReturnValue(true)
   mockConvertToKes.mockResolvedValue({ kesAmountCents: 5000, fxRate: 1 })
   mockCheckCbkCompliance.mockResolvedValue({ allowed: true })
+  mockCheckMerchantLimits.mockResolvedValue({ allowed: true })
   mockScoreFraud.mockResolvedValue({ decision: 'ALLOW', score: 10, reasons: [] })
   mockStkPush.mockResolvedValue({ success: true, checkoutRequestId: 'chk-1', merchantRequestId: 'mreq-1' })
 })

@@ -9,6 +9,7 @@ import {
   ApiError,
   saveAdminSecret, clearAdminSecret, hasAdminSecret, verifyAdminSecret,
   auth, merchants, consumers, transactions, fx, devices, accounting, loyalty, admin,
+  settlement, kyc,
 } from '../api'
 
 // ─── Fetch mock helpers ───────────────────────────────────────────────────────
@@ -576,5 +577,90 @@ describe('admin', () => {
     await admin.getFleetAlerts()
     expect(lastCallUrl()).toContain('/fleet/alerts')
     expect(lastCallOpts().headers['X-Admin-Secret']).toBe('admin-secret-key')
+  })
+})
+
+// ─── auth.googleLogin ─────────────────────────────────────────────────────────
+
+describe('auth.googleLogin', () => {
+  it('POSTs credential and role to /api/v1/auth/google', async () => {
+    mockOk({ token: 'gtok', consumerId: 'cid', role: 'consumer', expiresAt: 9999, refreshToken: 'rt' })
+    await auth.googleLogin('google-credential', 'consumer')
+    expect(lastCallUrl()).toContain('/auth/google')
+    expect(lastCallBody()).toMatchObject({ credential: 'google-credential', role: 'consumer' })
+  })
+
+  it('includes phone when provided', async () => {
+    mockOk({ token: 'gtok', consumerId: 'cid', role: 'consumer', expiresAt: 9999, refreshToken: 'rt' })
+    await auth.googleLogin('google-credential', 'consumer', '254712345678')
+    expect(lastCallBody()).toMatchObject({ phone: '254712345678' })
+  })
+})
+
+// ─── settlement ───────────────────────────────────────────────────────────────
+
+describe('settlement', () => {
+  it('list GETs /api/v1/settlements with page and limit', async () => {
+    mockOk({ settlements: [], total: 0 })
+    await settlement.list(2, 10)
+    expect(lastCallUrl()).toContain('/settlements?page=2&limit=10')
+  })
+
+  it('get GETs /api/v1/settlements/:id', async () => {
+    mockOk({ id: 's-1' })
+    await settlement.get('s-1')
+    expect(lastCallUrl()).toContain('/settlements/s-1')
+  })
+
+  it('getAccount GETs /api/v1/settlements/account/me', async () => {
+    mockOk({ accountType: 'MPESA' })
+    await settlement.getAccount()
+    expect(lastCallUrl()).toContain('/settlements/account/me')
+  })
+
+  it('setAccount POSTs to /api/v1/settlements/account', async () => {
+    mockOk({ id: 'acc-1', accountType: 'MPESA' })
+    await settlement.setAccount({ accountType: 'MPESA', mpesaPhone: '254712345678' })
+    expect(lastCallUrl()).toContain('/settlements/account')
+    expect(lastCallOpts().method).toBe('POST')
+    expect(lastCallBody()).toMatchObject({ accountType: 'MPESA', mpesaPhone: '254712345678' })
+  })
+})
+
+// ─── kyc ─────────────────────────────────────────────────────────────────────
+
+describe('kyc', () => {
+  it('status GETs /api/v1/kyc/status', async () => {
+    mockOk({ status: 'PENDING' })
+    await kyc.status()
+    expect(lastCallUrl()).toContain('/kyc/status')
+  })
+
+  it('documents GETs /api/v1/kyc/documents', async () => {
+    mockOk({ documents: [] })
+    await kyc.documents()
+    expect(lastCallUrl()).toContain('/kyc/documents')
+  })
+
+  it('uploadDocument POSTs to /api/v1/kyc/documents', async () => {
+    mockOk({ id: 'doc-1' })
+    await kyc.uploadDocument({ docType: 'NATIONAL_ID', fileUrl: 'https://example.com/doc.pdf' })
+    expect(lastCallUrl()).toContain('/kyc/documents')
+    expect(lastCallOpts().method).toBe('POST')
+    expect(lastCallBody()).toMatchObject({ docType: 'NATIONAL_ID', fileUrl: 'https://example.com/doc.pdf' })
+  })
+
+  it('businessDetails GETs /api/v1/kyc/business-details', async () => {
+    mockOk({ kra_pin: 'A001234567B' })
+    await kyc.businessDetails()
+    expect(lastCallUrl()).toContain('/kyc/business-details')
+  })
+
+  it('updateBusinessDetails PUTs to /api/v1/kyc/business-details', async () => {
+    mockOk({})
+    await kyc.updateBusinessDetails({ kraPin: 'A001234567B' })
+    expect(lastCallUrl()).toContain('/kyc/business-details')
+    expect(lastCallOpts().method).toBe('PUT')
+    expect(lastCallBody()).toMatchObject({ kraPin: 'A001234567B' })
   })
 })

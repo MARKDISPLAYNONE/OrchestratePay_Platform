@@ -119,8 +119,8 @@ router.post('/plans', requireAuth, validate(createPlanSchema), async (req: Reque
       active:      plan.active,
       createdAt:   plan.created_at,
     })
-  } catch (err: any) {
-    logger.error('Failed to create subscription plan', { error: err.message, merchantId })
+  } catch (err: unknown) {
+    logger.error('Failed to create subscription plan', { error: (err as Error).message, merchantId })
     res.status(500).json({ error: 'Failed to create subscription plan' })
   }
 })
@@ -163,8 +163,8 @@ router.get('/plans', requireAuth, async (req: Request, res: Response) => {
         createdAt:       r.created_at,
       })),
     })
-  } catch (err: any) {
-    logger.error('Failed to list subscription plans', { error: err.message, merchantId })
+  } catch (err: unknown) {
+    logger.error('Failed to list subscription plans', { error: (err as Error).message, merchantId })
     res.status(500).json({ error: 'Failed to list subscription plans' })
   }
 })
@@ -207,8 +207,8 @@ router.delete('/plans/:id', requireAuth, async (req: Request, res: Response) => 
 
     logger.info('Subscription plan soft-deleted', { merchantId, planId })
     res.json({ deleted: true, planId })
-  } catch (err: any) {
-    logger.error('Failed to delete subscription plan', { error: err.message, planId })
+  } catch (err: unknown) {
+    logger.error('Failed to delete subscription plan', { error: (err as Error).message, planId })
     res.status(500).json({ error: 'Failed to delete subscription plan' })
   }
 })
@@ -259,12 +259,12 @@ router.post('/enroll', validate(enrollSchema), async (req: Request, res: Respons
       nextBillingAt: nextBilling.toISOString(),
       ...(trialEndsAt ? { trialEndsAt: trialEndsAt.toISOString() } : {}),
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Unique constraint on (plan_id, consumer_phone) — already enrolled
-    if (err.code === '23505') {
+    if ((err as NodeJS.ErrnoException).code === '23505') {
       return res.status(409).json({ error: 'Phone number is already enrolled in this plan' })
     }
-    logger.error('Failed to enroll subscriber', { error: err.message, planId })
+    logger.error('Failed to enroll subscriber', { error: (err as Error).message, planId })
     res.status(500).json({ error: 'Failed to enroll in plan' })
   }
 })
@@ -304,8 +304,8 @@ router.delete('/enroll/:enrollmentId', validate(cancelEnrollmentSchema), async (
     })
 
     res.json({ cancelled: true })
-  } catch (err: any) {
-    logger.error('Failed to cancel enrollment', { error: err.message, enrollmentId })
+  } catch (err: unknown) {
+    logger.error('Failed to cancel enrollment', { error: (err as Error).message, enrollmentId })
     res.status(500).json({ error: 'Failed to cancel enrollment' })
   }
 })
@@ -345,8 +345,8 @@ router.get('/plans/:id/enrollments', requireAuth, async (req: Request, res: Resp
         enrolledAt:    r.enrolled_at,
       })),
     })
-  } catch (err: any) {
-    logger.error('Failed to list enrollments', { error: err.message, planId })
+  } catch (err: unknown) {
+    logger.error('Failed to list enrollments', { error: (err as Error).message, planId })
     res.status(500).json({ error: 'Failed to list enrollments' })
   }
 })

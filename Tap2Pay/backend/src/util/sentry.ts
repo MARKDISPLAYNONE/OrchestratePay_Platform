@@ -26,7 +26,7 @@ export function initSentry(): void {
       tracesSampleRate:   process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
       // Never send PII — phone numbers, emails, NFC UIDs, etc.
       sendDefaultPii: false,
-      beforeSend(event: any) {
+      beforeSend(event: Record<string, unknown>) {
         // Scrub anything that looks like a phone number (254XXXXXXXXX)
         const str = JSON.stringify(event)
         if (/254\d{9}/.test(str)) {
@@ -36,9 +36,9 @@ export function initSentry(): void {
       },
     })
     logger.info('Sentry initialised', { environment: process.env.NODE_ENV })
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.warn('Sentry initialisation failed — continuing without error tracking', {
-      error: err.message,
+      error: (err as Error).message,
     })
   }
 }
@@ -49,7 +49,7 @@ export function captureException(err: unknown, context?: Record<string, unknown>
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Sentry = require('@sentry/node')
-    Sentry.withScope((scope: any) => {
+    Sentry.withScope((scope: { setExtras(extras: Record<string, unknown>): void }) => {
       if (context) scope.setExtras(context)
       Sentry.captureException(err)
     })

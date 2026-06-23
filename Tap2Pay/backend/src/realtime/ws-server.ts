@@ -52,7 +52,7 @@ export function initWsServer(httpServer: Server): void {
 
     if (!token) { ws.close(1008, 'token required'); return }
 
-    let payload: any
+    let payload: unknown
     try {
       payload = jwt.verify(token, process.env.JWT_SECRET!)
     } catch {
@@ -84,8 +84,22 @@ function handleTerminalConnection(ws: WebSocket, txnId: string) {
     ws.close(1011, 'Internal error')
   })
 
+  // Declare before subscribe so cleanup() can reference them even if subscribe
+  // callback fires synchronously with an error (before the setInterval/setTimeout below).
+  // eslint-disable-next-line prefer-const
+  let pingTimer: ReturnType<typeof setInterval> | undefined
+  // eslint-disable-next-line prefer-const
+  let idleTimer:  ReturnType<typeof setTimeout>  | undefined
+
+  function cleanup() {
+    if (pingTimer !== undefined) clearInterval(pingTimer)
+    if (idleTimer  !== undefined) clearTimeout(idleTimer)
+    sub.unsubscribe().catch(() => {})
+    sub.quit().catch(() => {})
+  }
+
   void sub.subscribe(channel, (err) => {
-    if (err) { logger.error('WS: subscribe failed', { channel, error: err.message }); ws.close(1011, 'Subscribe failed') }
+    if (err) { logger.error('WS: subscribe failed', { channel, error: err.message }); ws.close(1011, 'Subscribe failed'); cleanup() }
   })
 
   sub.on('message', (_ch: string, message: string) => {
@@ -93,25 +107,18 @@ function handleTerminalConnection(ws: WebSocket, txnId: string) {
     cleanup()
   })
 
-  const pingTimer = setInterval(() => {
+  pingTimer = setInterval(() => {
     if (ws.readyState === WebSocket.OPEN) ws.ping()
     else clearInterval(pingTimer)
   }, PING_INTERVAL_MS)
 
-  const idleTimer = setTimeout(() => {
+  idleTimer = setTimeout(() => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.close(1000, 'Payment window expired')
       logger.info('WS: terminal idle timeout', { txnId })
     }
     cleanup()
   }, IDLE_TIMEOUT_MS)
-
-  function cleanup() {
-    clearInterval(pingTimer)
-    clearTimeout(idleTimer)
-    sub.unsubscribe().catch(() => {})
-    sub.quit().catch(() => {})
-  }
 
   ws.on('close', () => { cleanup(); logger.debug('WS: terminal disconnected', { txnId }) })
   ws.on('error', (err) => { logger.error('WS: terminal socket error', { txnId, error: err.message }); cleanup() })
@@ -121,7 +128,7 @@ function handleTerminalConnection(ws: WebSocket, txnId: string) {
 // Subscribes to consumer:payment:{consumerId} — mpesa-callback publishes here.
 // Maintains a Redis presence key so mpesa-callback knows to skip FCM if WS is live.
 
-function handleConsumerConnection(ws: WebSocket, consumerId: string, _payload: any) {
+function handleConsumerConnection(ws: WebSocket, consumerId: string, _payload: unknown) {
   logger.info('WS: consumer wallet connected', { consumerId })
 
   const channel     = `consumer:payment:${consumerId}`
@@ -136,8 +143,20 @@ function handleConsumerConnection(ws: WebSocket, consumerId: string, _payload: a
     ws.close(1011, 'Internal error')
   })
 
+  // Declare before subscribe so cleanup() can reference pingTimer even if subscribe
+  // callback fires synchronously with an error.
+  // eslint-disable-next-line prefer-const
+  let pingTimer: ReturnType<typeof setInterval> | undefined
+
+  function cleanup() {
+    if (pingTimer !== undefined) clearInterval(pingTimer)
+    redis.del(presenceKey).catch(() => {})
+    sub.unsubscribe().catch(() => {})
+    sub.quit().catch(() => {})
+  }
+
   void sub.subscribe(channel, (err) => {
-    if (err) { logger.error('WS: consumer subscribe failed', { channel, error: err.message }); ws.close(1011, 'Subscribe failed') }
+    if (err) { logger.error('WS: consumer subscribe failed', { channel, error: err.message }); ws.close(1011, 'Subscribe failed'); cleanup() }
   })
 
   // Unlike terminal connections, consumer connections are persistent.
@@ -146,7 +165,7 @@ function handleConsumerConnection(ws: WebSocket, consumerId: string, _payload: a
     if (ws.readyState === WebSocket.OPEN) ws.send(message)
   })
 
-  const pingTimer = setInterval(() => {
+  pingTimer = setInterval(() => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.ping()
       // Refresh presence key on each ping — consumer is still connected
@@ -155,13 +174,6 @@ function handleConsumerConnection(ws: WebSocket, consumerId: string, _payload: a
       clearInterval(pingTimer)
     }
   }, PING_INTERVAL_MS)
-
-  function cleanup() {
-    clearInterval(pingTimer)
-    redis.del(presenceKey).catch(() => {})
-    sub.unsubscribe().catch(() => {})
-    sub.quit().catch(() => {})
-  }
 
   ws.on('close', () => { cleanup(); logger.debug('WS: consumer wallet disconnected', { consumerId }) })
   ws.on('error', (err) => { logger.error('WS: consumer socket error', { consumerId, error: err.message }); cleanup() })

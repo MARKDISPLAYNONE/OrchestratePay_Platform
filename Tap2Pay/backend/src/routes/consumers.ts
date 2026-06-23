@@ -157,7 +157,7 @@ router.put('/me', async (req: Request, res: Response) => {
   const { displayName, smsOptIn } = req.body
 
   const updates: string[] = []
-  const values: any[] = []
+  const values: unknown[] = []
   let idx = 1
 
   if (displayName !== undefined) {
@@ -291,8 +291,8 @@ router.post('/pay/:merchantId', validate(consumerPaySchema), async (req: Request
     const converted = await convertToKes(amountCents, currency)
     kesAmountCents = converted.kesAmountCents
     fxRate = converted.fxRate
-  } catch (fxErr: any) {
-    logger.error('FX conversion failed (consumer pay)', { currency, amountCents, error: fxErr.message })
+  } catch (fxErr: unknown) {
+    logger.error('FX conversion failed (consumer pay)', { currency, amountCents, error: (fxErr as Error).message })
     return res.status(503).json({ error: 'Exchange rate unavailable — please try again' })
   }
 
@@ -488,14 +488,13 @@ router.post('/p2p-pay', validate(p2pPaySchema), async (req: Request, res: Respon
     return res.status(503).json({ error: 'P2P payments temporarily unavailable' })
   }
   const platformResult = await db.query(
-    'SELECT id, name FROM merchants WHERE id = $1 AND active = true',
+    'SELECT 1 FROM merchants WHERE id = $1 AND active = true',
     [platformMerchantId]
   )
   if (platformResult.rows.length === 0) {
     logger.error('PLATFORM_MERCHANT_ID points to missing/inactive merchant', { platformMerchantId })
     return res.status(503).json({ error: 'P2P payments temporarily unavailable' })
   }
-  const _platform = platformResult.rows[0]
 
   // ─── FX conversion ────────────────────────────────────────────────────────
   if (!isSupportedCurrency(currency)) {
@@ -507,8 +506,8 @@ router.post('/p2p-pay', validate(p2pPaySchema), async (req: Request, res: Respon
     const converted = await convertToKes(amountCents, currency)
     kesAmountCents = converted.kesAmountCents
     fxRate = converted.fxRate
-  } catch (fxErr: any) {
-    logger.error('FX conversion failed (p2p-pay)', { currency, amountCents, error: fxErr.message })
+  } catch (fxErr: unknown) {
+    logger.error('FX conversion failed (p2p-pay)', { currency, amountCents, error: (fxErr as Error).message })
     return res.status(503).json({ error: 'Exchange rate unavailable — please try again' })
   }
 

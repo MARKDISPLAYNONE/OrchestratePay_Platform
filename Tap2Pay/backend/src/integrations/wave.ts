@@ -28,10 +28,10 @@ export async function postToWave(
   payload: GlPostingPayload,
   accessToken: string,
   businessId: string,
-  settings: Record<string, any>
+  settings: Record<string, unknown>
 ): Promise<GlPostingResult> {
-  const anchorAccountId   = settings.anchorAccountId   // Wave requires a specific account ID (UUID)
-  const revenueAccountId  = settings.revenueAccountId
+  const anchorAccountId   = settings.anchorAccountId as string | undefined  // Wave requires a specific account ID (UUID)
+  const revenueAccountId  = settings.revenueAccountId as string | undefined
 
   if (!anchorAccountId || !revenueAccountId) {
     return {
@@ -72,7 +72,16 @@ export async function postToWave(
       signal: AbortSignal.timeout(15_000),
     })
 
-    const json = await res.json().catch(() => ({})) as any
+    const json = await res.json().catch(() => ({})) as {
+      data?: {
+        moneyTransactionCreate?: {
+          didSucceed?: boolean
+          transaction?: { id?: string }
+          inputErrors?: Array<{ code?: string; message?: string; path?: string }>
+        }
+      }
+      errors?: Array<{ message?: string }>
+    }
     const result = json?.data?.moneyTransactionCreate
 
     if (result?.didSucceed && result?.transaction?.id) {
@@ -83,13 +92,13 @@ export async function postToWave(
       return { success: true, externalId: result.transaction.id }
     }
 
-    const inputErrors = result?.inputErrors?.map((e: any) => e.message).join('; ')
+    const inputErrors = result?.inputErrors?.map((e: { message?: string }) => e.message ?? '').join('; ')
     const errMsg = inputErrors ?? json?.errors?.[0]?.message ?? `HTTP ${res.status}`
     logger.warn('Wave posting failed', { txnId: payload.transactionId, error: errMsg })
     return { success: false, error: errMsg }
 
-  } catch (err: any) {
-    logger.error('Wave POST threw', { txnId: payload.transactionId, error: err.message })
-    return { success: false, error: err.message }
+  } catch (err: unknown) {
+    logger.error('Wave POST threw', { txnId: payload.transactionId, error: (err as Error).message })
+    return { success: false, error: (err as Error).message }
   }
 }

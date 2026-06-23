@@ -179,8 +179,8 @@ describe('GET /api/v1/admin/fleet', () => {
       .set(ADMIN_HDR)
 
     expect(res.status).toBe(200)
-    expect(Array.isArray(res.body)).toBe(true)
-    expect(res.body).toHaveLength(1)
+    expect(Array.isArray(res.body.devices)).toBe(true)
+    expect(res.body.devices).toHaveLength(1)
   })
 })
 
@@ -199,7 +199,7 @@ describe('GET /api/v1/admin/fleet/alerts', () => {
       .set(ADMIN_HDR)
 
     expect(res.status).toBe(200)
-    expect(res.body).toHaveLength(1)
+    expect(res.body.alerts).toHaveLength(1)
   })
 
   it('filters to unresolved alerts when ?unresolved is set', async () => {

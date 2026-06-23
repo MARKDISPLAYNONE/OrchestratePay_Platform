@@ -46,9 +46,10 @@ describe('Daraja constants', () => {
 })
 
 describe('initiateB2cPayout', () => {
-  it('throws a not-yet-implemented error', async () => {
+  it('throws when B2C credentials are not configured', async () => {
+    delete process.env.DARAJA_B2C_INITIATOR_NAME
     await expect(
-      initiateB2cPayout({ refundId: 'r-1', merchantId: 'm-1', amountCents: 1000 })
-    ).rejects.toThrow('not yet implemented')
+      initiateB2cPayout({ refundId: 'r-1', merchantId: 'm-1', amountCents: 1000, recipientPhone: '254712345678' })
+    ).rejects.toThrow('B2C payout not configured')
   })
 })

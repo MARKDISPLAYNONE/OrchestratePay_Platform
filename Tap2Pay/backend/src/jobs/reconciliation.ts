@@ -132,9 +132,9 @@ async function _reconcile(): Promise<void> {
           })
         }
 
-      } catch (txnErr: any) {
+      } catch (txnErr: unknown) {
         logger.error('Reconciliation: error processing transaction', {
-          txnId: txn.id, error: txnErr.message
+          txnId: txn.id, error: (txnErr as Error).message
         })
         // Continue to next transaction — don't let one error stop the whole job
       }
@@ -171,8 +171,8 @@ async function _reconcile(): Promise<void> {
       [JSON.stringify({ processed, confirmed, declined, expired, durationMs })]
     )
 
-  } catch (err: any) {
-    logger.error('Reconciliation job failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Reconciliation job failed', { error: (err as Error).message })
   }
 }
 

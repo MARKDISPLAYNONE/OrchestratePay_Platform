@@ -70,8 +70,8 @@ router.post('/', requireAuth, validate(createWebhookSchema), async (req: Request
       active:    webhook.active,
       createdAt: webhook.createdAt,
     })
-  } catch (err: any) {
-    logger.error('Failed to register webhook', { merchantId, error: err.message })
+  } catch (err: unknown) {
+    logger.error('Failed to register webhook', { merchantId, error: (err as Error).message })
     return res.status(500).json({ error: 'Failed to register webhook' })
   }
 })
@@ -116,8 +116,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
         },
       })),
     })
-  } catch (err: any) {
-    logger.error('Failed to list webhooks', { merchantId, error: err.message })
+  } catch (err: unknown) {
+    logger.error('Failed to list webhooks', { merchantId, error: (err as Error).message })
     return res.status(500).json({ error: 'Failed to list webhooks' })
   }
 })
@@ -143,8 +143,8 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
 
     logger.info('Webhook deactivated', { merchantId, webhookId: id })
     return res.status(200).json({ id, active: false })
-  } catch (err: any) {
-    logger.error('Failed to delete webhook', { merchantId, webhookId: id, error: err.message })
+  } catch (err: unknown) {
+    logger.error('Failed to delete webhook', { merchantId, webhookId: id, error: (err as Error).message })
     return res.status(500).json({ error: 'Failed to delete webhook' })
   }
 })
@@ -181,8 +181,8 @@ router.post('/:id/test', requireAuth, async (req: Request, res: Response) => {
 
     logger.info('Webhook test ping enqueued', { merchantId, webhookId: id })
     return res.status(202).json({ queued: true })
-  } catch (err: any) {
-    logger.error('Failed to enqueue webhook test', { merchantId, webhookId: id, error: err.message })
+  } catch (err: unknown) {
+    logger.error('Failed to enqueue webhook test', { merchantId, webhookId: id, error: (err as Error).message })
     return res.status(500).json({ error: 'Failed to enqueue test delivery' })
   }
 })
@@ -223,8 +223,8 @@ router.get('/:id/deliveries', requireAuth, async (req: Request, res: Response) =
     )
 
     return res.json({ deliveries: rows })
-  } catch (err: any) {
-    logger.error('Failed to list webhook deliveries', { merchantId, webhookId: id, error: err.message })
+  } catch (err: unknown) {
+    logger.error('Failed to list webhook deliveries', { merchantId, webhookId: id, error: (err as Error).message })
     return res.status(500).json({ error: 'Failed to list deliveries' })
   }
 })

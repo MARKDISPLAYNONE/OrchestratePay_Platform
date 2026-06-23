@@ -62,14 +62,26 @@ router.post('/', async (req: Request, res: Response) => {
   // Everything below this line runs AFTER the response is sent
   try {
     await processCallback(req.body, req.ip)
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Log but don't crash — Safaricom already got its 200, no point crashing
-    logger.error('Callback processing error (async)', { error: err.message })
+    logger.error('Callback processing error (async)', { error: (err as Error).message })
   }
 })
 
-async function processCallback(body: any, remoteIp: string | undefined) {
-  const stkCallback = body?.Body?.stkCallback
+interface MpesaCallbackBody {
+  Body?: {
+    stkCallback?: {
+      MerchantRequestID: string
+      CheckoutRequestID: string
+      ResultCode: number
+      ResultDesc: string
+      CallbackMetadata?: { Item?: Array<{ Name: string; Value: unknown }> }
+    }
+  }
+}
+
+async function processCallback(body: unknown, remoteIp: string | undefined) {
+  const stkCallback = (body as MpesaCallbackBody)?.Body?.stkCallback
 
   if (!stkCallback) {
     logger.warn('Malformed callback body — missing stkCallback', { body })
@@ -96,8 +108,8 @@ async function processCallback(body: any, remoteIp: string | undefined) {
       [remoteIp, CheckoutRequestID, ResultCode, JSON.stringify(body)]
     )
     callbackLogId = logRow.rows[0]?.id ?? null
-  } catch (logErr: any) {
-    logger.error('Failed to archive Daraja callback — proceeding anyway', { error: logErr.message })
+  } catch (logErr: unknown) {
+    logger.error('Failed to archive Daraja callback — proceeding anyway', { error: (logErr as Error).message })
   }
 
   logger.info('M-Pesa callback received', {
@@ -149,7 +161,7 @@ async function processCallback(body: any, remoteIp: string | undefined) {
 
     // Helper to extract a named item from CallbackMetadata.Item array
     const getItem = (name: string) =>
-      CallbackMetadata?.Item?.find((i: any) => i.Name === name)?.Value
+      CallbackMetadata?.Item?.find((i: { Name: string; Value: unknown }) => i.Name === name)?.Value
 
     const mpesaReceipt = getItem('MpesaReceiptNumber') as string
     const callbackAmount = getItem('Amount') as number

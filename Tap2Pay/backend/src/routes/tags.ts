@@ -60,12 +60,12 @@ router.post('/sign', requireAuth, validate(signTagSchema), async (req: Request, 
 
     res.json({ uri, tagId, merchantId })
 
-  } catch (err: any) {
-    if (err.message?.includes('NFC_SIGNING_SECRET')) {
+  } catch (err: unknown) {
+    if ((err as Error).message?.includes('NFC_SIGNING_SECRET')) {
       logger.error('NFC signing secret not configured')
       return res.status(503).json({ error: 'NFC signing not configured on this server' })
     }
-    logger.error('Tag sign error', { error: err.message })
+    logger.error('Tag sign error', { error: (err as Error).message })
     res.status(500).json({ error: 'Failed to sign tag' })
   }
 })
@@ -79,8 +79,8 @@ router.get('/signing-key', requireAuth, async (req: Request, res: Response) => {
   try {
     const signingKey = deriveMerchantSigningKey(merchantId)
     res.json({ signingKey, merchantId })
-  } catch (err: any) {
-    if (err.message?.includes('NFC_SIGNING_SECRET')) {
+  } catch (err: unknown) {
+    if ((err as Error).message?.includes('NFC_SIGNING_SECRET')) {
       return res.status(503).json({ error: 'NFC signing not configured on this server' })
     }
     res.status(500).json({ error: 'Failed to derive signing key' })

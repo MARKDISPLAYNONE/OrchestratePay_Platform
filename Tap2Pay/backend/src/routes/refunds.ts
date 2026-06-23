@@ -78,8 +78,8 @@ router.post('/', requireAuth, validate(createRefundSchema), async (req: Request,
       amountCents,
       transactionId,
     })
-  } catch (err: any) {
-    logger.error('Failed to create refund', { error: err.message, transactionId, merchantId })
+  } catch (err: unknown) {
+    logger.error('Failed to create refund', { error: (err as Error).message, transactionId, merchantId })
     return res.status(500).json({ error: 'Failed to create refund' })
   }
 })
@@ -116,8 +116,8 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
       page,
       limit,
     })
-  } catch (err: any) {
-    logger.error('Failed to list refunds', { error: err.message, merchantId })
+  } catch (err: unknown) {
+    logger.error('Failed to list refunds', { error: (err as Error).message, merchantId })
     return res.status(500).json({ error: 'Failed to list refunds' })
   }
 })
@@ -144,8 +144,8 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     }
 
     return res.json(rows[0])
-  } catch (err: any) {
-    logger.error('Failed to fetch refund', { error: err.message, id, merchantId })
+  } catch (err: unknown) {
+    logger.error('Failed to fetch refund', { error: (err as Error).message, id, merchantId })
     return res.status(500).json({ error: 'Failed to fetch refund' })
   }
 })
@@ -185,11 +185,22 @@ router.patch('/refunds/:id', requireRole('ADMIN'), validate(adminRefundSchema), 
       [id]
     )
 
+    // Look up the consumer's phone number from the original transaction.
+    const { rows: txnRows } = await db.query(
+      `SELECT c.phone
+         FROM transactions t
+         JOIN consumers c ON c.id = t.consumer_id
+        WHERE t.id = $1`,
+      [refund.transaction_id]
+    )
+    const consumerPhone = txnRows[0]?.phone
+
     try {
       const b2cResult = await initiateB2cPayout({
-        refundId:    refund.id,
-        merchantId:  refund.merchant_id,
-        amountCents: refund.amount_cents,
+        refundId:       refund.id,
+        merchantId:     refund.merchant_id,
+        amountCents:    refund.amount_cents,
+        recipientPhone: consumerPhone ?? '',
       })
 
       const { rows: updated } = await db.query(
@@ -201,19 +212,19 @@ router.patch('/refunds/:id', requireRole('ADMIN'), validate(adminRefundSchema), 
       )
       logger.info('Refund B2C payout initiated', { refundId: id, requestId: b2cResult.requestId })
       return res.json(updated[0])
-    } catch (b2cErr: any) {
+    } catch (b2cErr: unknown) {
       const { rows: failed } = await db.query(
         `UPDATE refunds
             SET status = 'FAILED', notes = $2, updated_at = NOW()
           WHERE id = $1
           RETURNING *`,
-        [id, `B2C payout failed: ${b2cErr.message}`]
+        [id, `B2C payout failed: ${(b2cErr as Error).message}`]
       )
-      logger.error('Refund B2C payout failed', { refundId: id, error: b2cErr.message })
+      logger.error('Refund B2C payout failed', { refundId: id, error: (b2cErr as Error).message })
       return res.status(502).json({ error: 'B2C payout failed', refund: failed[0] })
     }
-  } catch (err: any) {
-    logger.error('Failed to process refund action', { error: err.message, id, action })
+  } catch (err: unknown) {
+    logger.error('Failed to process refund action', { error: (err as Error).message, id, action })
     return res.status(500).json({ error: 'Failed to process refund' })
   }
 })

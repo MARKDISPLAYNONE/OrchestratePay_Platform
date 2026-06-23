@@ -32,7 +32,7 @@ export default function QrPayPage() {
   const [amountKsh, setAmountKsh] = useState(searchParams.get('amount') ?? '')
   const [email, setEmail]         = useState('')
   const [password, setPassword]   = useState('')
-  const [txnId, setTxnId]         = useState<string | null>(null)
+  const [_txnId, setTxnId]        = useState<string | null>(null)
   const [mpesaRef, setMpesaRef]   = useState('')
   const [error, setError]         = useState('')
 

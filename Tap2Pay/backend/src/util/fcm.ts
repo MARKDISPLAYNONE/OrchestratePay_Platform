@@ -9,10 +9,14 @@
  */
 import { logger } from './logger'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _messaging: any = null
+/** Minimal interface for the firebase-admin Messaging instance. */
+interface FirebaseMessaging {
+  send(message: Record<string, unknown>): Promise<string>
+}
 
-function getMessaging() {
+let _messaging: FirebaseMessaging | null = null
+
+function getMessaging(): FirebaseMessaging | null {
   if (_messaging) return _messaging
 
   const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
@@ -25,11 +29,11 @@ function getMessaging() {
     if (!admin.apps.length) {
       admin.initializeApp({ credential: admin.credential.cert(JSON.parse(json)) })
     }
-    _messaging = admin.messaging()
+    _messaging = admin.messaging() as FirebaseMessaging
     logger.info('Firebase Admin SDK initialized')
     return _messaging
-  } catch (err: any) {
-    logger.warn('Firebase Admin SDK unavailable — FCM disabled', { error: err.message })
+  } catch (err: unknown) {
+    logger.warn('Firebase Admin SDK unavailable — FCM disabled', { error: (err as Error).message })
     return null
   }
 }
@@ -61,8 +65,8 @@ export async function sendFcmNotification(payload: FcmPayload): Promise<boolean>
       },
     })
     return true
-  } catch (err: any) {
-    logger.warn('FCM send failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.warn('FCM send failed', { error: (err as Error).message })
     return false
   }
 }

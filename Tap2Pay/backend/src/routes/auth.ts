@@ -37,7 +37,8 @@ import { validate, loginSchema } from '../middleware/validate'
 import { requireAuth, DEVICE_CACHE_TTL_S } from '../middleware/auth'
 import { deriveMerchantSigningKey } from '../util/nfc-signing'
 import { sendSms } from '../integrations/africas-talking'
-import { writeAuditLog } from '../util/audit'
+import { writeAuditLog, AuditEvent } from '../util/audit'
+import { runFullScreening } from '../util/aml-screening'
 
 const router = Router()
 const BCRYPT_ROUNDS = 12
@@ -110,9 +111,6 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
     if (!merchant.active) {
       return res.status(403).json({ error: 'Account is deactivated — contact support' })
     }
-    if (merchant.approval_status === 'PENDING_REVIEW') {
-      return res.status(403).json({ error: 'Account is pending review', status: 'PENDING_REVIEW' })
-    }
     if (merchant.approval_status === 'REJECTED') {
       return res.status(403).json({ error: 'Account registration was not approved', status: 'REJECTED' })
     }
@@ -152,8 +150,8 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
       expiresAt, nfcSigningKey, kraPin: merchant.kra_pin ?? null,
     })
 
-  } catch (err: any) {
-    logger.error('Merchant login error', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Merchant login error', { error: (err as Error).message })
     res.status(500).json({ error: 'Login failed — please try again' })
   }
 })
@@ -208,8 +206,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
       expiresAt: Date.now() + MERCHANT_ACCESS_TTL_S * 1000,
     })
 
-  } catch (err: any) {
-    logger.error('Merchant token refresh error', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Merchant token refresh error', { error: (err as Error).message })
     res.status(500).json({ error: 'Token refresh failed — please log in again' })
   }
 })
@@ -217,14 +215,32 @@ router.post('/refresh', async (req: Request, res: Response) => {
 // ─── POST /api/v1/auth/register (merchant self-service) ──────────────────────
 
 router.post('/register', async (req: Request, res: Response) => {
-  const { name, email, password, phone, businessRegNumber, idNumber,
-          mpesaShortcode, mpesaAccountRef, kraPin } = req.body
+  const {
+    name, email, password, phone, businessRegNumber, idNumber,
+    mpesaShortcode, mpesaAccountRef, kraPin,
+    // Business profile fields (optional)
+    businessType, businessAddressLine1, businessAddressCity,
+    natureOfBusiness, expectedMonthlyVolumeCents,
+    beneficialOwnerName, beneficialOwnerIdNumber, beneficialOwnerOwnershipPct,
+  } = req.body
 
   if (!name || !email || !password || !phone) {
     return res.status(400).json({ error: 'name, email, password, and phone are required' })
   }
   if (password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' })
+  }
+
+  const VALID_BUSINESS_TYPES = [
+    'SOLE_TRADER', 'PARTNERSHIP', 'LIMITED_COMPANY', 'NGO',
+    'COOPERATIVE', 'MONEY_EXCHANGE', 'CRYPTOCURRENCY', 'OTHER',
+  ]
+  if (businessType && !VALID_BUSINESS_TYPES.includes(businessType)) {
+    return res.status(400).json({ error: `businessType must be one of: ${VALID_BUSINESS_TYPES.join(', ')}` })
+  }
+  if (beneficialOwnerOwnershipPct !== undefined &&
+      (beneficialOwnerOwnershipPct < 1 || beneficialOwnerOwnershipPct > 100)) {
+    return res.status(400).json({ error: 'beneficialOwnerOwnershipPct must be between 1 and 100' })
   }
 
   try {
@@ -240,28 +256,45 @@ router.post('/register', async (req: Request, res: Response) => {
     const { rows } = await db.query(
       `INSERT INTO merchants
          (name, email, password_hash, phone, mpesa_shortcode, mpesa_account_ref,
-          kra_pin, business_reg_number, id_number, approval_status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING_REVIEW')
+          kra_pin, business_reg_number, id_number,
+          business_type, business_address_line1, business_address_city,
+          nature_of_business, expected_monthly_volume_cents,
+          beneficial_owner_name, beneficial_owner_id_number, beneficial_owner_ownership_pct,
+          approval_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'PENDING_REVIEW')
        RETURNING id, name, email, approval_status`,
-      [name, email.toLowerCase(), passwordHash, phone,
-       mpesaShortcode ?? null, mpesaAccountRef ?? null,
-       kraPin ?? null, businessRegNumber ?? null, idNumber ?? null]
+      [
+        name, email.toLowerCase(), passwordHash, phone,
+        mpesaShortcode ?? null, mpesaAccountRef ?? null,
+        kraPin ?? null, businessRegNumber ?? null, idNumber ?? null,
+        businessType ?? null, businessAddressLine1 ?? null, businessAddressCity ?? null,
+        natureOfBusiness ?? null, expectedMonthlyVolumeCents ?? null,
+        beneficialOwnerName ?? null, beneficialOwnerIdNumber ?? null,
+        beneficialOwnerOwnershipPct ?? null,
+      ]
     )
 
+    const merchant = rows[0]
+
     await writeAuditLog({
-      event: 'MERCHANT_REGISTERED', entityType: 'merchant', entityId: rows[0].id,
+      event: 'MERCHANT_REGISTERED', entityType: 'merchant', entityId: merchant.id,
       detail: { email: email.toLowerCase() }, ip: req.ip,
     })
-    logger.info('Merchant self-registered (PENDING_REVIEW)', { merchantId: rows[0].id })
+    logger.info('Merchant self-registered (PENDING_REVIEW)', { merchantId: merchant.id })
+
+    // Fire-and-forget initial AML screening — never blocks registration response
+    runFullScreening(merchant.id).catch(err =>
+      logger.warn('Initial AML screening failed', { error: (err as Error).message })
+    )
 
     res.status(201).json({
       message:    'Registration received — your account is pending review. You will be contacted within 1-2 business days.',
-      merchantId: rows[0].id,
+      merchantId: merchant.id,
       status:     'PENDING_REVIEW',
     })
 
-  } catch (err: any) {
-    logger.error('Merchant registration error', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Merchant registration error', { error: (err as Error).message })
     res.status(500).json({ error: 'Registration failed — please try again' })
   }
 })
@@ -287,7 +320,7 @@ router.post('/logout', requireAuth, async (req: Request, res: Response) => {
     await writeAuditLog({ event: 'MERCHANT_LOGOUT', entityType: 'merchant', entityId: merchantId, ip: req.ip })
     logger.info('Merchant logged out', { merchantId })
     res.json({ message: 'Logged out successfully' })
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: 'Logout failed' })
   }
 })
@@ -337,8 +370,8 @@ router.post('/consumer/register', async (req: Request, res: Response) => {
       consumerId: consumer.id, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
     })
 
-  } catch (err: any) {
-    logger.error('Consumer registration error', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Consumer registration error', { error: (err as Error).message })
     res.status(500).json({ error: 'Registration failed — please try again' })
   }
 })
@@ -389,9 +422,127 @@ router.post('/consumer/login', async (req: Request, res: Response) => {
       consumerId: consumer.id, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
     })
 
-  } catch (err: any) {
-    logger.error('Consumer login error', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Consumer login error', { error: (err as Error).message })
     res.status(500).json({ error: 'Login failed — please try again' })
+  }
+})
+
+// ─── POST /api/v1/auth/google ─────────────────────────────────────────────────
+// Handles Google Sign-In for both merchants and consumers.
+//
+// Merchants:   must already have a registered + approved account (email match).
+// Consumers:   sign in if email exists; otherwise return { needsPhone: true } so
+//              the client can collect a phone and re-POST with it to auto-register.
+
+router.post('/google', async (req: Request, res: Response) => {
+  const { credential, role = 'consumer', phone } = req.body
+
+  if (!credential) return res.status(400).json({ error: 'credential is required' })
+  if (role !== 'merchant' && role !== 'consumer') {
+    return res.status(400).json({ error: 'role must be merchant or consumer' })
+  }
+
+  const googleClientId = process.env.GOOGLE_CLIENT_ID
+  if (!googleClientId) {
+    logger.error('GOOGLE_CLIENT_ID not configured')
+    return res.status(503).json({ error: 'Google sign-in is not configured' })
+  }
+
+  let googleEmail: string
+  let googleName: string
+  try {
+    const { OAuth2Client } = await import('google-auth-library')
+    const client  = new OAuth2Client(googleClientId)
+    const ticket  = await client.verifyIdToken({ idToken: credential, audience: googleClientId })
+    const payload = ticket.getPayload()
+    if (!payload?.email) throw new Error('No email in Google token')
+    googleEmail = payload.email.toLowerCase()
+    googleName  = payload.name ?? googleEmail.split('@')[0]
+  } catch (err: unknown) {
+    logger.warn('Google token verification failed', { error: (err as Error).message })
+    return res.status(401).json({ error: 'Invalid Google credential' })
+  }
+
+  try {
+    // ── Merchant path ─────────────────────────────────────────────────────────
+    if (role === 'merchant') {
+      const { rows } = await db.query(
+        'SELECT id, name, active, approval_status FROM merchants WHERE email = $1',
+        [googleEmail]
+      )
+      const merchant = rows[0]
+      if (!merchant) {
+        return res.status(404).json({ error: 'No merchant account found for this Google account — please apply for access first.' })
+      }
+      if (!merchant.active || merchant.approval_status !== 'APPROVED') {
+        return res.status(403).json({ error: `Merchant account is not approved yet (status: ${merchant.approval_status})` })
+      }
+
+      const token        = issueMerchantAccessToken(merchant.id, merchant.name, 'google-oauth')
+      const refreshToken = await issueMerchantRefreshToken(merchant.id, 'google-oauth')
+      await writeAuditLog({ event: 'MERCHANT_LOGIN', entityType: 'merchant', entityId: merchant.id, ip: req.ip, detail: { method: 'google' } })
+      logger.info('Merchant signed in via Google', { merchantId: merchant.id })
+      return res.json({
+        token, refreshToken, role: 'MERCHANT',
+        merchantId: merchant.id, merchantName: merchant.name,
+        expiresAt: Date.now() + MERCHANT_ACCESS_TTL_S * 1000,
+      })
+    }
+
+    // ── Consumer path ─────────────────────────────────────────────────────────
+    const { rows } = await db.query(
+      'SELECT id, display_name, phone, active FROM consumers WHERE email = $1',
+      [googleEmail]
+    )
+
+    if (rows.length > 0) {
+      const consumer = rows[0]
+      if (!consumer.active) return res.status(403).json({ error: 'Account is deactivated' })
+
+      const token        = issueConsumerToken(consumer.id, consumer.display_name ?? consumer.phone)
+      const refreshToken = await issueRefreshToken(consumer.id, 'google-oauth')
+      await writeAuditLog({ event: 'CONSUMER_LOGIN', entityType: 'consumer', entityId: consumer.id, ip: req.ip, detail: { method: 'google' } })
+      logger.info('Consumer signed in via Google', { consumerId: consumer.id })
+      return res.json({
+        token, refreshToken, role: 'CONSUMER',
+        consumerId: consumer.id, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
+      })
+    }
+
+    // New consumer — need phone for M-Pesa (STK push requires a registered phone)
+    if (!phone) {
+      return res.status(202).json({ needsPhone: true, email: googleEmail, displayName: googleName })
+    }
+
+    if (!/^254[0-9]{9}$/.test(phone)) {
+      return res.status(400).json({ error: 'phone must be in format 254XXXXXXXXX (e.g. 254712345678)' })
+    }
+
+    const phoneInUse = await db.query('SELECT id FROM consumers WHERE phone = $1', [phone])
+    if (phoneInUse.rows.length > 0) {
+      return res.status(409).json({ error: 'Phone number already registered — sign in with email/password instead' })
+    }
+
+    const phoneHash = crypto.createHash('sha256').update(phone).digest('hex')
+    const { rows: created } = await db.query(
+      `INSERT INTO consumers (phone, phone_hash, email, display_name)
+       VALUES ($1,$2,$3,$4) RETURNING id, display_name, phone`,
+      [phone, phoneHash, googleEmail, googleName]
+    )
+    const consumer     = created[0]
+    const token        = issueConsumerToken(consumer.id, consumer.display_name ?? consumer.phone)
+    const refreshToken = await issueRefreshToken(consumer.id, 'google-oauth')
+    await writeAuditLog({ event: 'CONSUMER_REGISTERED', entityType: 'consumer', entityId: consumer.id, ip: req.ip, detail: { method: 'google' } })
+    logger.info('Consumer registered via Google', { consumerId: consumer.id })
+    return res.status(201).json({
+      token, refreshToken, role: 'CONSUMER',
+      consumerId: consumer.id, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
+    })
+
+  } catch (err: unknown) {
+    logger.error('Google auth error', { error: (err as Error).message })
+    res.status(500).json({ error: 'Authentication failed — please try again' })
   }
 })
 
@@ -447,8 +598,8 @@ router.post('/consumer/otp/request', async (req: Request, res: Response) => {
 
     res.json({ message: 'If this number is registered, an OTP has been sent.' })
 
-  } catch (err: any) {
-    logger.error('OTP request error', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('OTP request error', { error: (err as Error).message })
     res.status(500).json({ error: 'Failed to send OTP — please try again' })
   }
 })
@@ -500,8 +651,8 @@ router.post('/consumer/otp/verify', async (req: Request, res: Response) => {
       consumerId: consumer.id, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
     })
 
-  } catch (err: any) {
-    logger.error('OTP verify error', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('OTP verify error', { error: (err as Error).message })
     res.status(500).json({ error: 'OTP verification failed — please try again' })
   }
 })
@@ -548,8 +699,8 @@ router.post('/consumer/refresh', async (req: Request, res: Response) => {
       expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
     })
 
-  } catch (err: any) {
-    logger.error('Consumer token refresh error', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Consumer token refresh error', { error: (err as Error).message })
     res.status(500).json({ error: 'Token refresh failed — please log in again' })
   }
 })
@@ -570,7 +721,7 @@ router.post('/consumer/logout', async (req: Request, res: Response) => {
     )
     await writeAuditLog({ event: 'CONSUMER_LOGOUT', ip: req.ip })
     res.json({ message: 'Logged out successfully' })
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: 'Logout failed' })
   }
 })
@@ -578,7 +729,7 @@ router.post('/consumer/logout', async (req: Request, res: Response) => {
 // ─── Admin: merchant approval ─────────────────────────────────────────────────
 
 function requireAdminSecret(req: Request, res: Response, next: NextFunction) {
-  if (req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET) {
+  if (!process.env.ADMIN_SECRET || req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: 'Admin access required' })
   }
   next()
@@ -618,7 +769,7 @@ router.post('/admin/approve/:merchantId', requireAdminSecret, async (req: Reques
     : 'MERCHANT_REJECTED'
 
   await writeAuditLog({
-    event: auditEvent as any,
+    event: auditEvent as AuditEvent,
     entityType: 'merchant', entityId: merchantId,
     detail: { action: newStatus, notes: notes ?? null },
     ip: req.ip,

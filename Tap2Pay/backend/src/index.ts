@@ -61,8 +61,13 @@ import apiKeysRouter                from './routes/api-keys'
 import disputesRouter               from './routes/disputes'
 import refundsRouter                from './routes/refunds'
 import subscriptionsRouter          from './routes/subscriptions'
+import settlementRouter, { adminSettlementRouter } from './routes/settlement'
+import kycRouter, { adminKycRouter } from './routes/kyc'
+import { merchantRateLimit }        from './middleware/merchant-rate-limit'
+import { swaggerRouter }            from './util/swagger'
 import { runWebhookDeliveryJob }    from './jobs/webhook-delivery'
 import { runSubscriptionBillingJob, runTrialExpiry } from './jobs/subscription-billing'
+import { runSettlementJob }         from './jobs/settlement'
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '3000')
@@ -167,11 +172,11 @@ app.get('/readiness', async (_, res) => {
       redisHealthCheck(),            // verify Redis connection
     ])
     res.json({ status: 'ready', timestamp: new Date().toISOString() })
-  } catch (err: any) {
-    logger.warn('Readiness check failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.warn('Readiness check failed', { error: (err as Error).message })
     res.status(503).json({
       status:    'not_ready',
-      error:     err.message,
+      error:     (err as Error).message,
       timestamp: new Date().toISOString(),
     })
   }
@@ -205,7 +210,7 @@ app.get('/health/deep', async (_, res) => {
 // API routes
 app.use('/api/v1/auth',           authRouter)
 app.use('/api/v1/merchants',      merchantsRouter)
-app.use('/api/v1/transactions',   transactionLimiter, transactionsRouter)
+app.use('/api/v1/transactions',   transactionLimiter, merchantRateLimit({ max: 50, windowMs: 60_000 }), transactionsRouter)
 app.use('/api/v1/tags',           tagsRouter)
 app.use('/api/v1/admin',          adminRouter)
 app.use('/api/v1/wallet',         walletRouter)  // customer HCE session tokens
@@ -225,8 +230,15 @@ app.use('/api/v1/api-keys',       apiKeysRouter)         // merchant API key man
 app.use('/api/v1/disputes',       disputesRouter)        // payment dispute lifecycle
 app.use('/api/v1/refunds',        refundsRouter)         // B2C refund initiation
 app.use('/api/v1/subscriptions',  subscriptionsRouter)   // recurring subscription plans
+app.use('/api/v1/settlements',    merchantRateLimit({ max: 60, windowMs: 60_000 }), settlementRouter)
+app.use('/api/v1/kyc',            merchantRateLimit({ max: 30, windowMs: 60_000 }), kycRouter)
+app.use('/api/v1/admin/settlements', adminSettlementRouter)
+app.use('/api/v1/admin/kyc',         adminKycRouter)
 // requireSafaricomIp blocks non-Safaricom IPs in production (bypass in dev/test)
 app.use('/api/v1/mpesa-callback', requireSafaricomIp, mpesaCallbackRouter)
+
+// API documentation — not gated behind auth so integrators can explore
+app.use('/api-docs', swaggerRouter)
 
 // 404 handler — must come after all routes
 app.use((req, res) => {
@@ -286,8 +298,8 @@ async function start() {
     cron.schedule('*/5 * * * *', async () => {
       try {
         await runReconciliation()
-      } catch (err: any) {
-        logger.error('Scheduled reconciliation failed', { error: err.message })
+      } catch (err: unknown) {
+        logger.error('Scheduled reconciliation failed', { error: (err as Error).message })
       }
     })
 
@@ -299,8 +311,8 @@ async function start() {
       try {
         await db.query('REFRESH MATERIALIZED VIEW CONCURRENTLY mv_hourly_revenue')
         logger.info('mv_hourly_revenue refreshed')
-      } catch (err: any) {
-        logger.error('Materialized view refresh failed', { error: err.message })
+      } catch (err: unknown) {
+        logger.error('Materialized view refresh failed', { error: (err as Error).message })
       }
     })
 
@@ -309,8 +321,8 @@ async function start() {
       try {
         const count = await refreshAllRates()
         logger.info('Hourly FX rate refresh complete', { count })
-      } catch (err: any) {
-        logger.error('Hourly FX rate refresh failed', { error: err.message })
+      } catch (err: unknown) {
+        logger.error('Hourly FX rate refresh failed', { error: (err as Error).message })
       }
     })
 
@@ -318,8 +330,8 @@ async function start() {
     cron.schedule('*/2 * * * *', async () => {
       try {
         await runGlPostingJob()
-      } catch (err: any) {
-        logger.error('GL posting job failed', { error: err.message })
+      } catch (err: unknown) {
+        logger.error('GL posting job failed', { error: (err as Error).message })
       }
     })
 
@@ -327,8 +339,8 @@ async function start() {
     cron.schedule('* * * * *', async () => {
       try {
         await runWebhookDeliveryJob()
-      } catch (err: any) {
-        logger.error('Webhook delivery job failed', { error: err.message })
+      } catch (err: unknown) {
+        logger.error('Webhook delivery job failed', { error: (err as Error).message })
       }
     })
 
@@ -336,8 +348,8 @@ async function start() {
     cron.schedule('* * * * *', async () => {
       try {
         await runSubscriptionBillingJob()
-      } catch (err: any) {
-        logger.error('Subscription billing job failed', { error: err.message })
+      } catch (err: unknown) {
+        logger.error('Subscription billing job failed', { error: (err as Error).message })
       }
     })
 
@@ -345,17 +357,26 @@ async function start() {
     cron.schedule('0 2 * * *', async () => {
       try {
         await runTrialExpiry()
-      } catch (err: any) {
-        logger.error('Trial expiry job failed', { error: err.message })
+      } catch (err: unknown) {
+        logger.error('Trial expiry job failed', { error: (err as Error).message })
       }
     })
+
+    // Nightly settlement job at 23:50 Africa/Nairobi — after last business transactions
+    cron.schedule('50 23 * * *', async () => {
+      try {
+        await runSettlementJob()
+      } catch (err: unknown) {
+        logger.error('Settlement job failed', { error: (err as Error).message })
+      }
+    }, { timezone: 'Africa/Nairobi' })
 
     // Run reconciliation once at startup to handle any stuck transactions
     // from before the server was restarted
     setTimeout(() => runReconciliation(), 10_000)
 
-  } catch (err: any) {
-    logger.error('Server startup failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Server startup failed', { error: (err as Error).message })
     process.exit(1)
   }
 }
@@ -368,6 +389,7 @@ process.on('SIGTERM', () => {
 
 process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled Promise rejection', { reason })
+  process.exit(1)
 })
 
 void start()

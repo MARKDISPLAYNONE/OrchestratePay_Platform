@@ -163,15 +163,17 @@ describe('POST /api/v1/auth/login', () => {
     expect(res.body.error).toMatch(/deactivated/i)
   })
 
-  it('returns 403 when approval_status is PENDING_REVIEW', async () => {
-    mockQuery.mockResolvedValueOnce({
-      rows: [{ ...MERCHANT_ROW, approval_status: 'PENDING_REVIEW' }],
-    })
+  it('allows PENDING_REVIEW merchants to log in so they can submit KYC docs', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ ...MERCHANT_ROW, approval_status: 'PENDING_REVIEW' }] })
+      .mockResolvedValueOnce({ rows: [] })   // UPDATE device_id
+      .mockResolvedValueOnce({ rows: [] })   // INSERT refresh token
     const res = await request(buildApp())
       .post('/api/v1/auth/login')
       .send(VALID_BODY)
-    expect(res.status).toBe(403)
-    expect(res.body.status).toBe('PENDING_REVIEW')
+    expect(res.status).toBe(200)
+    expect(res.body.token).toBeDefined()
+    expect(res.body.role).toBe('MERCHANT')
   })
 
   it('returns 403 when approval_status is REJECTED', async () => {

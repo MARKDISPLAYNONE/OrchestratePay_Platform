@@ -21,6 +21,7 @@ import { db } from '../db/index'
 import { redis } from '../db/redis'
 import { logger } from '../util/logger'
 import { getDarajaCircuitStatus } from '../integrations/daraja'
+import { writeAuditLog } from '../util/audit'
 
 const router = Router()
 
@@ -159,8 +160,8 @@ router.get('/stats', async (_req: Request, res: Response) => {
       }
     })
 
-  } catch (err: any) {
-    logger.error('Admin stats query failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Admin stats query failed', { error: (err as Error).message })
     res.status(500).json({ error: 'Stats query failed' })
   }
 })
@@ -187,7 +188,7 @@ router.get('/pending', async (_req: Request, res: Response) => {
       transactions: result.rows,
       note: 'Transactions pending > 300s will be picked up by the next reconciliation run'
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: 'Query failed' })
   }
 })
@@ -220,8 +221,8 @@ router.get('/merchants', async (_req: Request, res: Response) => {
       ORDER BY m.name ASC
     `)
     res.json({ merchants: rows })
-  } catch (err: any) {
-    logger.error('Admin merchants query failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Admin merchants query failed', { error: (err as Error).message })
     res.status(500).json({ error: 'Query failed' })
   }
 })
@@ -241,9 +242,81 @@ router.get('/consumers', async (_req: Request, res: Response) => {
       LIMIT 500
     `)
     res.json({ consumers: rows })
-  } catch (err: any) {
-    logger.error('Admin consumers query failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('Admin consumers query failed', { error: (err as Error).message })
     res.status(500).json({ error: 'Query failed' })
+  }
+})
+
+// ─── AML FLAG MANAGEMENT ──────────────────────────────────────────────────────
+
+// GET /api/v1/admin/aml/flags  — list open AML flags (default: OPEN only)
+router.get('/aml/flags', async (req: Request, res: Response) => {
+  const status = (req.query.status as string) ?? 'OPEN'
+  try {
+    const { rows } = await db.query(
+      `SELECT f.id, f.flag_type, f.status, f.details, f.created_at, f.reviewed_at, f.reviewed_by,
+              m.name AS merchant_name, m.email AS merchant_email,
+              m.sanctions_status, m.aml_risk_level
+       FROM aml_flags f
+       LEFT JOIN merchants m ON m.id = f.merchant_id
+       WHERE ($1 = 'ALL' OR f.status = $1)
+       ORDER BY f.created_at DESC
+       LIMIT 100`,
+      [status.toUpperCase()]
+    )
+    res.json(rows)
+  } catch (err: unknown) {
+    res.status(500).json({ error: 'Failed to fetch AML flags' })
+  }
+})
+
+// PATCH /api/v1/admin/aml/flags/:id  — update flag status
+router.patch('/aml/flags/:id', async (req: Request, res: Response) => {
+  const { status, reviewedBy, notes } = req.body
+  if (!['REVIEWED', 'CLEARED', 'REPORTED_TO_FIU'].includes(status)) {
+    return res.status(400).json({ error: 'status must be REVIEWED, CLEARED, or REPORTED_TO_FIU' })
+  }
+  try {
+    const { rows } = await db.query(
+      `UPDATE aml_flags
+          SET status = $2, reviewed_at = NOW(), reviewed_by = $3,
+              details = details || $4::jsonb
+        WHERE id = $1
+        RETURNING id, status, reviewed_at, reviewed_by`,
+      [req.params.id, status, reviewedBy ?? 'admin', JSON.stringify({ adminNotes: notes })]
+    )
+    if (rows.length === 0) return res.status(404).json({ error: 'Flag not found' })
+
+    // If cleared, update merchant sanctions_status back to CLEAR
+    if (status === 'CLEARED') {
+      const { rows: [flag] } = await db.query(
+        `SELECT merchant_id FROM aml_flags WHERE id = $1`,
+        [req.params.id]
+      )
+      if (flag?.merchant_id) {
+        // Only clear if no other OPEN flags remain
+        const { rows: [openCount] } = await db.query(
+          `SELECT COUNT(*) AS cnt FROM aml_flags WHERE merchant_id = $1 AND status = 'OPEN' AND id != $2`,
+          [flag.merchant_id, req.params.id]
+        )
+        if (parseInt(openCount?.cnt ?? '0') === 0) {
+          await db.query(
+            `UPDATE merchants SET sanctions_status = 'CLEAR' WHERE id = $1`,
+            [flag.merchant_id]
+          )
+        }
+      }
+    }
+
+    await writeAuditLog({
+      event: 'ADMIN_ACTION',
+      detail: { action: 'aml_flag_updated', flagId: req.params.id, status, reviewedBy, notes },
+      ip: req.ip,
+    })
+    res.json(rows[0])
+  } catch (err: unknown) {
+    res.status(500).json({ error: 'Failed to update AML flag' })
   }
 })
 

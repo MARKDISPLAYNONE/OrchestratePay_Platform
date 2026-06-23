@@ -68,7 +68,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const payload = extractJwt(req, res)
   if (!payload) return
 
-  const role = (payload as any).role as Role | undefined
+  const role = payload.role
   if (role && role !== 'MERCHANT') {
     return res.status(403).json({ error: 'Merchant credentials required' })
   }
@@ -86,7 +86,7 @@ export function requireConsumerAuth(req: Request, res: Response, next: NextFunct
   const payload = extractJwt(req, res)
   if (!payload) return
 
-  if ((payload as any).role !== 'CONSUMER') {
+  if (payload.role !== 'CONSUMER') {
     return res.status(403).json({ error: 'Consumer credentials required' })
   }
 
@@ -103,7 +103,7 @@ export function requireRole(...roles: Role[]) {
     const payload = extractJwt(req, res)
     if (!payload) return
 
-    const role = (payload as any).role as Role | undefined
+    const role = payload.role
     // Legacy merchant tokens have no role — default to MERCHANT
     const effective: Role = role ?? 'MERCHANT'
 
@@ -157,10 +157,10 @@ async function checkDeviceBinding(payload: MerchantPayload, res: Response): Prom
     }
 
     return true
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.warn('Device binding check failed — failing open', {
       merchantId: payload.sub,
-      error: err.message,
+      error: (err as Error).message,
     })
     return true
   }
@@ -213,8 +213,8 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
       exp:      0,
     }
     next()
-  } catch (err: any) {
-    logger.error('API key lookup failed', { error: err.message })
+  } catch (err: unknown) {
+    logger.error('API key lookup failed', { error: (err as Error).message })
     res.status(401).json({ error: 'Authentication failed' })
   }
 }
@@ -232,7 +232,17 @@ export function requireAuthOrApiKey(req: Request, res: Response, next: NextFunct
 
 // ─── Internal helper ─────────────────────────────────────────────────────────
 
-function extractJwt(req: Request, res: Response): object | null {
+/** Minimal shape of the decoded JWT payload. */
+interface JwtPayloadWithRole {
+  role?: Role
+  sub?: string
+  name?: string
+  deviceId?: string
+  iat?: number
+  exp?: number
+}
+
+function extractJwt(req: Request, res: Response): JwtPayloadWithRole | null {
   const header = req.headers.authorization
   if (!header?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Missing authentication token' })
@@ -242,10 +252,11 @@ function extractJwt(req: Request, res: Response): object | null {
   const token = header.slice(7)
 
   try {
-    return jwt.verify(token, process.env.JWT_SECRET!) as object
-  } catch (err: any) {
-    logger.warn('JWT verification failed', { error: err.message, ip: req.ip })
-    if (err.name === 'TokenExpiredError') {
+    return jwt.verify(token, process.env.JWT_SECRET!) as JwtPayloadWithRole
+  } catch (err: unknown) {
+    const e = err as Error & { name?: string }
+    logger.warn('JWT verification failed', { error: e.message, ip: req.ip })
+    if (e.name === 'TokenExpiredError') {
       res.status(401).json({ error: 'Session expired — please log in again' })
     } else {
       res.status(401).json({ error: 'Invalid authentication token' })

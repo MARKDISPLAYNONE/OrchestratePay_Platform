@@ -141,12 +141,12 @@ router.post('/:token/pay', validate(payLinkSchema), async (req: Request, res: Re
     })
     res.status(202).json(result)
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Restore the link if the DB write failed (and link was single-use)
     if (payload.singleUse) {
       await redis.setex(key, 60, raw).catch(() => {})
     }
-    logger.error('Payment link pay failed', { error: err.message, token })
+    logger.error('Payment link pay failed', { error: (err as Error).message, token })
     res.status(500).json({ error: 'Failed to initiate payment' })
   }
 })

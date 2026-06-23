@@ -1,11 +1,11 @@
-import { Router } from 'express'
+import { Router, Request, Response } from 'express'
 import { db } from '../db/index'
 import { requireAuth } from '../middleware/auth'
 
 const router = Router()
 
 // GET /api/v1/loyalty/balance — consumer's balance at this merchant
-router.get('/balance', requireAuth, async (req, res) => {
+router.get('/balance', requireAuth, async (req: Request, res: Response) => {
     const { consumerId } = req.query
     if (!consumerId || typeof consumerId !== 'string') {
         return res.status(400).json({ error: 'consumerId query param required' })
@@ -24,7 +24,7 @@ router.get('/balance', requireAuth, async (req, res) => {
           ON lp.merchant_id = lb.merchant_id AND lp.active = TRUE
         WHERE lb.consumer_id = $1
           AND lb.merchant_id = $2
-    `, [consumerId, (req as any).merchant.sub])
+    `, [consumerId, req.merchant!.sub])
 
     if (rows.length === 0) {
         return res.json({
@@ -38,16 +38,16 @@ router.get('/balance', requireAuth, async (req, res) => {
 })
 
 // GET /api/v1/merchants/me/loyalty — merchant's programme config
-router.get('/programme', requireAuth, async (req, res) => {
+router.get('/programme', requireAuth, async (req: Request, res: Response) => {
     const { rows } = await db.query(
         `SELECT * FROM loyalty_programmes WHERE merchant_id=$1`,
-        [(req as any).merchant.sub]
+        [req.merchant!.sub]
     )
     res.json(rows[0] ?? null)
 })
 
 // POST /api/v1/merchants/me/loyalty — create or update programme
-router.post('/programme', requireAuth, async (req, res) => {
+router.post('/programme', requireAuth, async (req: Request, res: Response) => {
     const { programme_type, points_per_ksh, stamps_for_reward, reward_description } = req.body
 
     if (!['POINTS', 'STAMPS'].includes(programme_type)) {
@@ -71,16 +71,16 @@ router.post('/programme', requireAuth, async (req, res) => {
           reward_description = EXCLUDED.reward_description,
           active            = TRUE
         RETURNING *
-    `, [(req as any).merchant.sub, programme_type,
+    `, [req.merchant!.sub, programme_type,
         points_per_ksh ?? null, stamps_for_reward ?? null, reward_description ?? null])
 
     res.status(201).json(rows[0])
 })
 
 // POST /api/v1/loyalty/redeem
-router.post('/redeem', requireAuth, async (req, res) => {
+router.post('/redeem', requireAuth, async (req: Request, res: Response) => {
     const { consumerId, redeemPoints, redeemStamps } = req.body
-    const merchantId = (req as any).merchant.sub
+    const merchantId = req.merchant!.sub
 
     if (!consumerId) return res.status(400).json({ error: 'consumerId required' })
     if (!redeemPoints && !redeemStamps) {

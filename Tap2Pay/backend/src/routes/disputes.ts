@@ -21,7 +21,7 @@ import Joi from 'joi'
 import jwt from 'jsonwebtoken'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db/index'
-import { requireRole } from '../middleware/auth'
+import { requireRole, MerchantPayload, ConsumerPayload } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { logger } from '../util/logger'
 
@@ -66,17 +66,17 @@ function requireMerchantOrConsumer(req: Request, res: Response, next: NextFuncti
   }
 
   try {
-    const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET!) as any
+    const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET!) as { role?: string; sub: string }
     if (payload.role === 'MERCHANT') {
-      req.merchant = payload
+      req.merchant = payload as unknown as MerchantPayload
     } else if (payload.role === 'CONSUMER') {
-      req.consumer = payload
+      req.consumer = payload as unknown as ConsumerPayload
     } else {
       return res.status(403).json({ error: 'Invalid role for disputes' })
     }
     next()
-  } catch (err: any) {
-    if (err.name === 'TokenExpiredError') {
+  } catch (err: unknown) {
+    if ((err as Error).name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Session expired — please log in again' })
     }
     return res.status(401).json({ error: 'Invalid authentication token' })
@@ -167,8 +167,8 @@ router.post(
         reasonCode,
         createdAt: new Date().toISOString(),
       })
-    } catch (err: any) {
-      logger.error('Failed to create dispute', { error: err.message, transactionId, principalId })
+    } catch (err: unknown) {
+      logger.error('Failed to create dispute', { error: (err as Error).message, transactionId, principalId })
       return res.status(500).json({ error: 'Failed to create dispute' })
     }
   }
@@ -197,7 +197,7 @@ router.get('/', requireMerchantOrConsumer, async (req: Request, res: Response) =
 
   try {
     let query: string
-    let params: any[]
+    let params: unknown[]
 
     if (isMerchant) {
       query = `
@@ -230,8 +230,8 @@ router.get('/', requireMerchantOrConsumer, async (req: Request, res: Response) =
     const { rows } = await db.query(query, params)
 
     return res.json({ disputes: rows, total: rows.length })
-  } catch (err: any) {
-    logger.error('Failed to list disputes', { error: err.message, principalId, isMerchant })
+  } catch (err: unknown) {
+    logger.error('Failed to list disputes', { error: (err as Error).message, principalId, isMerchant })
     return res.status(500).json({ error: 'Failed to list disputes' })
   }
 })
@@ -275,8 +275,8 @@ router.get('/:id', requireMerchantOrConsumer, async (req: Request, res: Response
     // Strip internal FK columns before returning
     const { merchant_id: _merchantId, consumer_id: _consumerId, ...publicDispute } = dispute
     return res.json(publicDispute)
-  } catch (err: any) {
-    logger.error('Failed to fetch dispute', { error: err.message, id, principalId })
+  } catch (err: unknown) {
+    logger.error('Failed to fetch dispute', { error: (err as Error).message, id, principalId })
     return res.status(500).json({ error: 'Failed to fetch dispute' })
   }
 })
@@ -303,7 +303,7 @@ router.patch(
     // requireRole('ADMIN') attaches nothing to req.merchant/req.consumer.
     // We decode the admin sub directly from the token.
     const header  = req.headers.authorization!
-    const payload = jwt.decode(header.slice(7)) as any
+    const payload = jwt.decode(header.slice(7)) as { sub?: string } | null
     const adminSub = payload?.sub ?? null
 
     const isResolution = RESOLVED_STATUSES.has(status)
@@ -333,8 +333,8 @@ router.patch(
       logger.info('Dispute updated by admin', { disputeId: id, status, adminSub })
 
       return res.json(updated[0])
-    } catch (err: any) {
-      logger.error('Failed to update dispute', { error: err.message, id, status })
+    } catch (err: unknown) {
+      logger.error('Failed to update dispute', { error: (err as Error).message, id, status })
       return res.status(500).json({ error: 'Failed to update dispute' })
     }
   }

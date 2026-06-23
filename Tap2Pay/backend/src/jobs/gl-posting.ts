@@ -92,7 +92,25 @@ export async function runGlPostingJob(): Promise<void> {
   }
 }
 
-async function processPosting(row: any): Promise<void> {
+interface GlPostingRow {
+  id:                       string
+  accounting_integration_id: string
+  platform:                 string
+  transaction_id:           string
+  merchant_id:              string
+  amount_cents:             number
+  currency:                 string
+  description:              string
+  journal_date:             string
+  attempt_count:            number
+  access_token:             string
+  refresh_token:            string
+  token_expires_at:         string | null
+  realm_id:                 string
+  settings:                 Record<string, unknown> | null
+}
+
+async function processPosting(row: GlPostingRow): Promise<void> {
   const payload: GlPostingPayload = {
     transactionId: row.transaction_id,
     merchantId:    row.merchant_id,
