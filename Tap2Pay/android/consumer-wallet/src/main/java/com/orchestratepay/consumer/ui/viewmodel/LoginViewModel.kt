@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.orchestratepay.consumer.api.AuthResponse
 import com.orchestratepay.consumer.api.ConsumerApiClient
+import com.orchestratepay.consumer.api.ConsumerApiClientInstance
 import com.orchestratepay.consumer.db.ConsumerSessionManager
 import com.orchestratepay.consumer.realtime.ConsumerWebSocketClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +19,9 @@ sealed class LoginState {
     data class Error(val message: String) : LoginState()
 }
 
-class LoginViewModel : ViewModel() {
+class LoginViewModel(
+    private val apiClient: ConsumerApiClientInstance = ConsumerApiClient
+) : ViewModel() {
 
     private val _state = MutableStateFlow<LoginState>(LoginState.Idle)
     val state: StateFlow<LoginState> = _state.asStateFlow()
@@ -32,7 +35,7 @@ class LoginViewModel : ViewModel() {
         _state.value = LoginState.Loading
 
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.login(email, password) }
+            runCatching { apiClient.login(email, password) }
                 .onSuccess { auth ->
                     ConsumerSessionManager.saveSession(
                         token = auth.token,
@@ -44,7 +47,7 @@ class LoginViewModel : ViewModel() {
                     
                     // Persist FCM token to backend now that we have a valid JWT
                     ConsumerSessionManager.getFcmToken()?.let { fcm ->
-                        runCatching { ConsumerApiClient.updateFcmToken(fcm) }
+                        runCatching { apiClient.updateFcmToken(fcm) }
                     }
                     
                     ConsumerWebSocketClient.shared?.connect()

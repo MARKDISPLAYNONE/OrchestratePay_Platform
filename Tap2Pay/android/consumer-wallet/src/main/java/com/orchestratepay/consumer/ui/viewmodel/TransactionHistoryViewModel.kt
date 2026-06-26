@@ -3,6 +3,7 @@ package com.orchestratepay.consumer.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.orchestratepay.consumer.api.ConsumerApiClient
+import com.orchestratepay.consumer.api.ConsumerApiClientInstance
 import com.orchestratepay.consumer.api.Transaction
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,7 +18,9 @@ data class TransactionHistoryState(
     val disputeSuccess: String? = null
 )
 
-class TransactionHistoryViewModel : ViewModel() {
+class TransactionHistoryViewModel(
+    private val apiClient: ConsumerApiClientInstance = ConsumerApiClient
+) : ViewModel() {
 
     private val _state = MutableStateFlow(TransactionHistoryState())
     val state: StateFlow<TransactionHistoryState> = _state.asStateFlow()
@@ -35,7 +38,7 @@ class TransactionHistoryViewModel : ViewModel() {
 
         _state.value = _state.value.copy(isLoading = true, error = null)
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.getTransactions(limit, offset) }
+            runCatching { apiClient.getTransactions(limit, offset) }
                 .onSuccess { resp ->
                     val newList = _state.value.transactions + resp.transactions
                     _state.value = _state.value.copy(
@@ -56,7 +59,7 @@ class TransactionHistoryViewModel : ViewModel() {
 
     fun fileDispute(transactionId: String, reason: String) {
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.fileDispute(transactionId, reason) }
+            runCatching { apiClient.fileDispute(transactionId, reason) }
                 .onSuccess {
                     _state.value = _state.value.copy(disputeSuccess = "Dispute filed successfully")
                 }
