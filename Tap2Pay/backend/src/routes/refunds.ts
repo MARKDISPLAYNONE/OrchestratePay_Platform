@@ -3,7 +3,7 @@ import Joi from 'joi'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db/index'
 import { requireAuth } from '../middleware/auth'
-import { requireRole } from '../middleware/auth'
+import { requireAdmin } from './admin'
 import { validate } from '../middleware/validate'
 import { logger } from '../util/logger'
 import { initiateB2cPayout } from '../integrations/daraja'
@@ -150,8 +150,10 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   }
 })
 
-// PATCH /api/v1/admin/refunds/:id
-router.patch('/refunds/:id', requireRole('ADMIN'), validate(adminRefundSchema), async (req: Request, res: Response) => {
+// ─── Admin: PATCH /api/v1/admin/refunds/:id ───────────────────────────────────
+// Mounted via adminRefundRouter at /api/v1/admin/refunds in index.ts.
+export const adminRefundRouter = Router()
+adminRefundRouter.patch('/:id', requireAdmin, validate(adminRefundSchema), async (req: Request, res: Response) => {
   const { id } = req.params
   const { action, notes } = req.body
 
@@ -194,13 +196,16 @@ router.patch('/refunds/:id', requireRole('ADMIN'), validate(adminRefundSchema), 
       [refund.transaction_id]
     )
     const consumerPhone = txnRows[0]?.phone
+    if (!consumerPhone) {
+      return res.status(422).json({ error: 'No consumer phone number associated with this transaction — B2C payout not possible' })
+    }
 
     try {
       const b2cResult = await initiateB2cPayout({
         refundId:       refund.id,
         merchantId:     refund.merchant_id,
         amountCents:    refund.amount_cents,
-        recipientPhone: consumerPhone ?? '',
+        recipientPhone: consumerPhone,
       })
 
       const { rows: updated } = await db.query(

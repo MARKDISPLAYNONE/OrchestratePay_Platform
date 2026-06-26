@@ -121,7 +121,7 @@ data class P2pPayResponse(
 
 // ─── Retrofit service ─────────────────────────────────────────────────────────
 
-private interface ConsumerService {
+interface ConsumerService {
     @POST("api/v1/auth/consumer/login")
     suspend fun login(@Body body: Map<String, String>): AuthResponse
 
@@ -182,15 +182,26 @@ private interface ConsumerService {
         @Header("Authorization") auth: String,
         @Body body: P2pPayRequest
     ): P2pPayResponse
+
+    @POST("api/v1/loyalty/redeem")
+    suspend fun redeemLoyalty(
+        @Header("Authorization") auth: String,
+        @Body body: Map<String, String>
+    ): Map<String, Any>
+
+    @POST("api/v1/disputes")
+    suspend fun fileDispute(
+        @Header("Authorization") auth: String,
+        @Body body: Map<String, String>
+    ): Map<String, Any>
 }
 
 // ─── Public API singleton ─────────────────────────────────────────────────────
 
-object ConsumerApiClient {
+open class ConsumerApiClientInstance {
+    var svc: ConsumerService? = null
 
-    private lateinit var svc: ConsumerService
-
-    fun init(baseUrl: String) {
+    open fun init(baseUrl: String) {
         val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
         val client  = OkHttpClient.Builder().addInterceptor(logging).build()
         svc = Retrofit.Builder()
@@ -203,62 +214,62 @@ object ConsumerApiClient {
 
     private fun bearer() = "Bearer ${ConsumerSessionManager.getToken()}"
 
-    suspend fun login(email: String, password: String): AuthResponse =
-        svc.login(mapOf("email" to email, "password" to password))
+    open suspend fun login(email: String, password: String): AuthResponse =
+        svc!!.login(mapOf("email" to email, "password" to password))
 
-    suspend fun register(email: String, password: String, phone: String): AuthResponse =
-        svc.register(mapOf("email" to email, "password" to password, "phone" to phone))
+    open suspend fun register(email: String, password: String, phone: String): AuthResponse =
+        svc!!.register(mapOf("email" to email, "password" to password, "phone" to phone))
 
-    suspend fun getProfile(): ConsumerProfile = svc.getProfile(bearer())
+    open suspend fun getProfile(): ConsumerProfile = svc!!.getProfile(bearer())
 
-    suspend fun updateProfile(displayName: String? = null, smsOptIn: Boolean? = null): Map<String, Boolean> {
+    open suspend fun updateProfile(displayName: String? = null, smsOptIn: Boolean? = null): Map<String, Boolean> {
         val body = mutableMapOf<String, Any>()
         displayName?.let { body["displayName"] = it }
         smsOptIn?.let    { body["smsOptIn"]    = it }
-        return svc.updateProfile(bearer(), body)
+        return svc!!.updateProfile(bearer(), body)
     }
 
-    suspend fun getTransactions(limit: Int = 50, offset: Int = 0): TransactionsResponse =
-        svc.getTransactions(bearer(), limit, offset)
+    open suspend fun getTransactions(limit: Int = 50, offset: Int = 0): TransactionsResponse =
+        svc!!.getTransactions(bearer(), limit, offset)
 
-    suspend fun getLoyalty(): LoyaltyResponse = svc.getLoyalty(bearer())
+    open suspend fun getLoyalty(): LoyaltyResponse = svc!!.getLoyalty(bearer())
 
-    suspend fun requestQrToken(): QrTokenResponse = svc.requestQrToken(bearer())
+    open suspend fun requestQrToken(): QrTokenResponse = svc!!.requestQrToken(bearer())
 
-    suspend fun updateFcmToken(token: String) =
-        svc.updateFcmToken(bearer(), mapOf("fcmToken" to token))
+    open suspend fun updateFcmToken(token: String) =
+        svc!!.updateFcmToken(bearer(), mapOf("fcmToken" to token))
 
-    suspend fun getTransactionStatus(txnId: String): TxnStatusResponse =
-        svc.getTransactionStatus(bearer(), txnId)
+    open suspend fun getTransactionStatus(txnId: String): TxnStatusResponse =
+        svc!!.getTransactionStatus(bearer(), txnId)
 
-    suspend fun getMerchantInfo(merchantId: String): MerchantInfoResponse =
-        svc.getMerchantInfo(merchantId)
+    open suspend fun getMerchantInfo(merchantId: String): MerchantInfoResponse =
+        svc!!.getMerchantInfo(merchantId)
 
-    suspend fun payMerchant(
+    open suspend fun payMerchant(
         merchantId:     String,
         amountCents:    Int,
         idempotencyKey: String,
         timestamp:      Long
     ): PayMerchantResponse =
-        svc.payMerchant(bearer(), merchantId, PayMerchantRequest(amountCents, idempotencyKey, timestamp))
+        svc!!.payMerchant(bearer(), merchantId, PayMerchantRequest(amountCents, idempotencyKey, timestamp))
 
-    suspend fun payMerchantViaHce(
+    open suspend fun payMerchantViaHce(
         merchantId:       String,
         amountCents:      Int,
         idempotencyKey:   String,
         timestamp:        Long,
         merchantHceToken: String,
     ): PayMerchantResponse =
-        svc.payMerchantViaHce(bearer(), merchantId,
+        svc!!.payMerchantViaHce(bearer(), merchantId,
             PayMerchantViaHceRequest(amountCents, idempotencyKey, timestamp, merchantHceToken))
 
-    suspend fun requestP2pToken(amountCents: Int? = null): P2pTokenResponse {
+    open suspend fun requestP2pToken(amountCents: Int? = null): P2pTokenResponse {
         val body = mutableMapOf<String, Any?>()
         amountCents?.let { body["amountCents"] = it }
-        return svc.requestP2pToken(bearer(), body)
+        return svc!!.requestP2pToken(bearer(), body)
     }
 
-    suspend fun p2pPay(
+    open suspend fun p2pPay(
         p2pToken:        String?,
         payeeConsumerId: String?,
         amountCents:     Int,
@@ -266,5 +277,13 @@ object ConsumerApiClient {
         timestamp:       Long,
         source:          String,
     ): P2pPayResponse =
-        svc.p2pPay(bearer(), P2pPayRequest(p2pToken, payeeConsumerId, amountCents, idempotencyKey, timestamp, source))
+        svc!!.p2pPay(bearer(), P2pPayRequest(p2pToken, payeeConsumerId, amountCents, idempotencyKey, timestamp, source))
+
+    open suspend fun redeemLoyalty(merchantId: String, rewardId: String): Map<String, Any> =
+        svc!!.redeemLoyalty(bearer(), mapOf("merchantId" to merchantId, "rewardId" to rewardId))
+
+    open suspend fun fileDispute(transactionId: String, reason: String): Map<String, Any> =
+        svc!!.fileDispute(bearer(), mapOf("transactionId" to transactionId, "reason" to reason))
 }
+
+object ConsumerApiClient : ConsumerApiClientInstance()

@@ -9,34 +9,26 @@ import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.orchestratepay.consumer.R
-import com.orchestratepay.consumer.api.ConsumerApiClient
 import com.orchestratepay.consumer.db.ConsumerSessionManager
 import com.orchestratepay.consumer.hce.P2PHceSession
+import com.orchestratepay.consumer.ui.viewmodel.P2pTokenState
+import com.orchestratepay.consumer.ui.viewmodel.P2PPayViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * P2PSendActivity — Scenarios 6, 7, 10, 11 (payee side).
- *
- * The payee consumer:
- *   1. Optionally enters a preset amount (or leaves it blank for the payer to choose)
- *   2. Taps "Request" to call POST /consumers/p2p-token → gets a 90-second token
- *   3. The activity simultaneously:
- *      a. Calls P2PHceSession.activate() so ConsumerHceService emits a P2P_REQUEST
- *         payload when the payer taps their phone (Scenarios 6 & 7 — NFC)
- *      b. Renders the token as a QR bitmap (Scenarios 10 & 11 — QR)
- *   4. The payer reads the NFC tap OR scans the QR and calls POST /consumers/p2p-pay
- *
- * Token expires after 90 seconds.  A countdown is shown and the user can refresh.
- */
 class P2PSendActivity : AppCompatActivity() {
+
+    private val viewModel: P2PPayViewModel by viewModels()
 
     private lateinit var etAmount:   EditText
     private lateinit var btnRequest: Button
@@ -45,6 +37,7 @@ class P2PSendActivity : AppCompatActivity() {
     private lateinit var tvTimer:    TextView
     private lateinit var btnRefresh: Button
     private lateinit var progress:   ProgressBar
+    private lateinit var tilAmount:  View
 
     private var expiresAt: Long = 0L
     private var timerJob: kotlinx.coroutines.Job? = null
@@ -65,30 +58,47 @@ class P2PSendActivity : AppCompatActivity() {
         tvTimer    = findViewById(R.id.tv_timer)
         btnRefresh = findViewById(R.id.btn_refresh)
         progress   = findViewById(R.id.progress_bar)
+        tilAmount  = findViewById(R.id.til_amount)
 
         val displayName = ConsumerSessionManager.getDisplayName()
         tvStatus.text = if (displayName != null) "Receiving as $displayName" else "Request payment"
 
-        btnRequest.setOnClickListener { requestToken() }
+        btnRequest.setOnClickListener { attemptRequest() }
         btnRefresh.setOnClickListener {
-            timerJob?.cancel()
-            P2PHceSession.clear()
-            ivQr.visibility     = View.GONE
-            tvTimer.visibility  = View.GONE
-            btnRefresh.visibility = View.GONE
-            btnRequest.visibility = View.VISIBLE
-            etAmount.visibility   = View.VISIBLE
-            tvStatus.text = if (displayName != null) "Receiving as $displayName" else "Request payment"
+            resetUI()
+        }
+
+        setupViewModel()
+    }
+
+    private fun setupViewModel() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.tokenState.collect { state ->
+                    when (state) {
+                        is P2pTokenState.Idle -> {
+                            progress.visibility = View.GONE
+                            btnRequest.isEnabled = true
+                        }
+                        is P2pTokenState.Loading -> {
+                            progress.visibility = View.VISIBLE
+                            btnRequest.isEnabled = false
+                        }
+                        is P2pTokenState.Success -> {
+                            handleTokenSuccess(state.response)
+                        }
+                        is P2pTokenState.Error -> {
+                            progress.visibility = View.GONE
+                            btnRequest.isEnabled = true
+                            Toast.makeText(this@P2PSendActivity, state.message, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        timerJob?.cancel()
-        P2PHceSession.clear()
-    }
-
-    private fun requestToken() {
+    private fun attemptRequest() {
         val amountText = etAmount.text.toString().trim()
         val amountCents: Int? = if (amountText.isNotEmpty()) {
             val ksh = amountText.toDoubleOrNull()
@@ -98,67 +108,71 @@ class P2PSendActivity : AppCompatActivity() {
             }
             (ksh * 100).toInt()
         } else null
+        
+        viewModel.requestP2pToken(amountCents)
+    }
 
-        progress.visibility   = View.VISIBLE
-        btnRequest.isEnabled  = false
+    private suspend fun handleTokenSuccess(resp: com.orchestratepay.consumer.api.P2pTokenResponse) {
+        expiresAt = resp.expiresAt
+        val consumerId = ConsumerSessionManager.getConsumerId() ?: ""
+        val displayName = ConsumerSessionManager.getDisplayName()
 
-        lifecycleScope.launch {
-            runCatching { ConsumerApiClient.requestP2pToken(amountCents) }
-                .onSuccess { resp ->
-                    expiresAt = resp.expiresAt
-                    val consumerId = ConsumerSessionManager.getConsumerId() ?: ""
-                    val displayName = ConsumerSessionManager.getDisplayName()
+        // HCE
+        P2PHceSession.activate(
+            P2PHceSession.Session(
+                p2pToken    = resp.token,
+                consumerId  = consumerId,
+                displayName = displayName,
+                amountCents = etAmount.text.toString().toDoubleOrNull()?.let { (it * 100).toLong() },
+                expiresAt   = resp.expiresAt,
+            )
+        )
 
-                    // Activate HCE so NFC tap works (Scenarios 6/7)
-                    P2PHceSession.activate(
-                        P2PHceSession.Session(
-                            p2pToken    = resp.token,
-                            consumerId  = consumerId,
-                            displayName = displayName,
-                            amountCents = amountCents?.toLong(),
-                            expiresAt   = resp.expiresAt,
-                        )
-                    )
-
-                    // Render QR for scanner flow (Scenarios 10/11)
-                    val qrBitmap = withContext(Dispatchers.Default) {
-                        generateQr(resp.token, 512)
-                    }
-
-                    progress.visibility    = View.GONE
-                    etAmount.visibility    = View.GONE
-                    btnRequest.visibility  = View.GONE
-                    ivQr.visibility        = View.VISIBLE
-                    ivQr.setImageBitmap(qrBitmap)
-                    tvTimer.visibility     = View.VISIBLE
-                    btnRefresh.visibility  = View.VISIBLE
-
-                    val amountLabel = amountCents?.let { " — KSh ${"%.2f".format(it / 100.0)}" } ?: ""
-                    tvStatus.text = "Hold your phone for tap, or show QR$amountLabel"
-
-                    startCountdown()
-                }
-                .onFailure { e ->
-                    progress.visibility   = View.GONE
-                    btnRequest.isEnabled  = true
-                    Toast.makeText(this@P2PSendActivity,
-                        "Could not generate token: ${e.message}", Toast.LENGTH_LONG).show()
-                }
+        // QR
+        val qrBitmap = withContext(Dispatchers.Default) {
+            generateQr(resp.token, 512)
         }
+
+        progress.visibility    = View.GONE
+        tilAmount.visibility   = View.GONE
+        btnRequest.visibility  = View.GONE
+        ivQr.visibility        = View.VISIBLE
+        ivQr.setImageBitmap(qrBitmap)
+        tvTimer.visibility     = View.VISIBLE
+        btnRefresh.visibility  = View.VISIBLE
+
+        val amountLabel = etAmount.text.toString().toDoubleOrNull()?.let { " — KSh ${"%.2f".format(it)}" } ?: ""
+        tvStatus.text = "Hold your phone for tap, or show QR$amountLabel"
+
+        startCountdown()
+    }
+
+    private fun resetUI() {
+        timerJob?.cancel()
+        P2PHceSession.clear()
+        ivQr.visibility     = View.GONE
+        tvTimer.visibility  = View.GONE
+        btnRefresh.visibility = View.GONE
+        btnRequest.visibility = View.VISIBLE
+        tilAmount.visibility  = View.VISIBLE
+        val displayName = ConsumerSessionManager.getDisplayName()
+        tvStatus.text = if (displayName != null) "Receiving as $displayName" else "Request payment"
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        timerJob?.cancel()
+        P2PHceSession.clear()
     }
 
     private fun startCountdown() {
+        timerJob?.cancel()
         timerJob = lifecycleScope.launch {
             while (true) {
                 val remaining = ((expiresAt - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
                 tvTimer.text = "Expires in ${remaining}s"
                 if (remaining == 0L) {
                     P2PHceSession.clear()
-                    ivQr.visibility       = View.GONE
-                    tvTimer.visibility    = View.GONE
-                    btnRefresh.visibility = View.VISIBLE
-                    btnRequest.visibility = View.VISIBLE
-                    etAmount.visibility   = View.VISIBLE
                     tvStatus.text = "Token expired — tap Refresh to generate a new one"
                     break
                 }

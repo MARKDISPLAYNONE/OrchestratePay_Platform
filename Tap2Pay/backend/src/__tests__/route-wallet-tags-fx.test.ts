@@ -352,11 +352,11 @@ describe('POST /api/v1/admin/fx/rates/refresh', () => {
     return app
   }
 
-  it('returns 403 without admin secret', async () => {
+  it('returns 401 without admin secret', async () => {
     const res = await request(buildApp())
       .post('/api/v1/admin/fx/rates/refresh')
 
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(401)
   })
 
   it('refreshes rates and returns count', async () => {

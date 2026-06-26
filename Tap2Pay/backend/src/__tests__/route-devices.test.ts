@@ -162,9 +162,9 @@ describe('POST /api/v1/devices/telemetry', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /api/v1/admin/fleet', () => {
-  it('returns 403 without admin secret', async () => {
+  it('returns 401 without admin secret', async () => {
     const res = await request(buildApp()).get('/api/v1/admin/fleet')
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(401)
   })
 
   it('returns device list', async () => {

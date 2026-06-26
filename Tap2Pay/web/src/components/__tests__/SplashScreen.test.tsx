@@ -14,13 +14,13 @@ describe('SplashScreen', () => {
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 
-  it('calls onDone after 12 seconds via timer', () => {
+  it('calls onDone after 3.5 seconds via timer', () => {
     jest.useFakeTimers()
     try {
       const onDone = jest.fn()
       render(<SplashScreen onDone={onDone} />)
       expect(onDone).not.toHaveBeenCalled()
-      act(() => { jest.advanceTimersByTime(12000) })
+      act(() => { jest.advanceTimersByTime(3500) })
       expect(onDone).toHaveBeenCalledTimes(1)
     } finally {
       jest.useRealTimers()
@@ -33,7 +33,7 @@ describe('SplashScreen', () => {
       const onDone = jest.fn()
       const { unmount } = render(<SplashScreen onDone={onDone} />)
       unmount()
-      act(() => { jest.advanceTimersByTime(12000) })
+      act(() => { jest.advanceTimersByTime(3500) })
       expect(onDone).not.toHaveBeenCalled()
     } finally {
       jest.useRealTimers()

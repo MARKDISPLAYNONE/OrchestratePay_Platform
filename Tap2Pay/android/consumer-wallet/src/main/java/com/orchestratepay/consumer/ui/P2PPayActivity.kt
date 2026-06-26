@@ -8,40 +8,32 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.orchestratepay.consumer.R
-import com.orchestratepay.consumer.api.ConsumerApiClient
 import com.orchestratepay.consumer.db.ConsumerSessionManager
 import com.orchestratepay.consumer.nfc.ConsumerP2PReader
+import com.orchestratepay.consumer.ui.viewmodel.P2pPayState
+import com.orchestratepay.consumer.ui.viewmodel.P2PSendViewModel
+import com.orchestratepay.consumer.util.BiometricGate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.security.SecureRandom
 
-/**
- * P2PPayActivity — Scenarios 6 & 7 (payer side, NFC tap).
- *
- * Payer consumer opens this screen and taps their phone to the payee's phone.
- * ConsumerP2PReader reads the P2P_REQUEST payload from the payee's ConsumerHceService.
- * After reading, the payer sees the payee name + amount and taps Confirm to pay.
- *
- * Entry points:
- *   - "Tap to pay friend" button in TapToPayFragment
- *   - ACTION_TECH_DISCOVERED NFC intent (IsoDep filter in manifest)
- *
- * Flow:
- *   Waiting → payer taps → NFC read → show confirmation → Confirm →
- *   POST /consumers/p2p-pay source=P2P_NFC → poll status → show result
- */
 class P2PPayActivity : AppCompatActivity() {
 
+    private val viewModel: P2PSendViewModel by viewModels()
     private var nfcAdapter: NfcAdapter? = null
     private var pendingP2pRequest: ConsumerP2PReader.P2PPaymentRequest? = null
+    private var sentAmountCents: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,12 +50,50 @@ class P2PPayActivity : AppCompatActivity() {
             finish(); return
         }
 
-        findViewById<TextView>(R.id.tv_instruction).text =
-            "Hold your phone to your friend's phone to read the payment request."
-
-        // "Scan QR instead" button for Scenarios 10/11
         findViewById<Button>(R.id.btn_scan_qr).setOnClickListener {
             startActivity(Intent(this, P2PQrScannerActivity::class.java))
+        }
+
+        setupViewModel()
+    }
+
+    private fun setupViewModel() {
+        val progress   = findViewById<ProgressBar>(R.id.progress_bar)
+        val tvStatus   = findViewById<TextView>(R.id.tv_status)
+        val btnConfirm = findViewById<Button>(R.id.btn_confirm)
+        val btnCancel  = findViewById<Button>(R.id.btn_cancel)
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.state.collect { state ->
+                    when (state) {
+                        is P2pPayState.Idle -> {
+                            progress.visibility = View.GONE
+                            tvStatus.visibility = View.GONE
+                        }
+                        is P2pPayState.Processing -> {
+                            progress.visibility = View.VISIBLE
+                            tvStatus.text = "Sending payment request…"
+                            tvStatus.visibility = View.VISIBLE
+                            btnConfirm.isEnabled = false
+                            btnCancel.isEnabled = false
+                        }
+                        is P2pPayState.Success -> {
+                            progress.visibility = View.GONE
+                            val amountKsh = "%.2f".format(sentAmountCents / 100.0)
+                            tvStatus.text = "✓ KSh $amountKsh sent successfully"
+                            delay(3000)
+                            finish()
+                        }
+                        is P2pPayState.Error -> {
+                            progress.visibility = View.GONE
+                            tvStatus.text = state.message
+                            btnConfirm.isEnabled = true
+                            btnCancel.isEnabled = true
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -95,15 +125,13 @@ class P2PPayActivity : AppCompatActivity() {
         tag?.let { readP2PRequest(it) }
     }
 
-    // ── NFC read ──────────────────────────────────────────────────────────────
-
     private fun readP2PRequest(tag: Tag) {
         lifecycleScope.launch(Dispatchers.IO) {
             val request = runCatching { ConsumerP2PReader.read(tag) }.getOrNull()
             withContext(Dispatchers.Main) {
                 if (request == null) {
                     Toast.makeText(this@P2PPayActivity,
-                        "Could not read payment request — ask friend to re-activate",
+                        "Could not read payment request",
                         Toast.LENGTH_LONG).show()
                 } else {
                     showConfirmation(request)
@@ -112,42 +140,33 @@ class P2PPayActivity : AppCompatActivity() {
         }
     }
 
-    // ── Confirmation UI ───────────────────────────────────────────────────────
-
     private fun showConfirmation(request: ConsumerP2PReader.P2PPaymentRequest) {
         pendingP2pRequest = request
-        val amountCents = request.amountCents
-
         val tvInstruction = findViewById<TextView>(R.id.tv_instruction)
         val tvAmount      = findViewById<TextView>(R.id.tv_amount)
-        val etAmount      = findViewById<android.widget.EditText>(R.id.et_amount)
+        val etAmount      = findViewById<EditText>(R.id.et_amount)
         val btnConfirm    = findViewById<Button>(R.id.btn_confirm)
         val btnCancel     = findViewById<Button>(R.id.btn_cancel)
-        val btnScanQr     = findViewById<Button>(R.id.btn_scan_qr)
+        val tilAmount     = findViewById<View>(R.id.til_amount)
 
-        btnScanQr.visibility = View.GONE
-
-        val payeeName = request.displayName ?: "Friend"
-        tvInstruction.text = "Pay $payeeName"
-
-        if (amountCents != null) {
-            // Payee preset the amount — show it, no editing
-            tvAmount.text       = "KSh ${"%.2f".format(amountCents / 100.0)}"
+        tvInstruction.text = "Pay ${request.displayName ?: "Friend"}"
+        
+        if (request.amountCents != null) {
+            val amountInt = request.amountCents.toInt()
+            tvAmount.text = "KSh ${"%.2f".format(amountInt / 100.0)}"
             tvAmount.visibility = View.VISIBLE
-            etAmount.visibility = View.GONE
-            btnConfirm.setOnClickListener { initiateP2PPayment(request, amountCents) }
+            tilAmount.visibility = View.GONE
+            btnConfirm.setOnClickListener { attemptPayment(amountInt) }
         } else {
-            // Payer enters amount
             tvAmount.visibility = View.GONE
-            etAmount.visibility = View.VISIBLE
-            etAmount.hint       = "Amount (KSh)"
+            tilAmount.visibility = View.VISIBLE
             btnConfirm.setOnClickListener {
                 val ksh = etAmount.text.toString().toDoubleOrNull()
                 if (ksh == null || ksh < 1.0) {
                     etAmount.error = "Enter a valid amount"
                     return@setOnClickListener
                 }
-                initiateP2PPayment(request, (ksh * 100).toLong())
+                attemptPayment((ksh * 100).toLong().toInt())
             }
         }
 
@@ -156,85 +175,20 @@ class P2PPayActivity : AppCompatActivity() {
         btnCancel.setOnClickListener { finish() }
     }
 
-    // ── Payment ───────────────────────────────────────────────────────────────
-
-    private fun initiateP2PPayment(
-        request:     ConsumerP2PReader.P2PPaymentRequest,
-        amountCents: Long
-    ) {
-        val progress   = findViewById<ProgressBar>(R.id.progress_bar)
-        val tvStatus   = findViewById<TextView>(R.id.tv_status)
-        val btnConfirm = findViewById<Button>(R.id.btn_confirm)
-        val btnCancel  = findViewById<Button>(R.id.btn_cancel)
-
-        btnConfirm.isEnabled   = false
-        btnCancel.isEnabled    = false
-        progress.visibility    = View.VISIBLE
-        tvStatus.text          = "Sending payment request…"
-        tvStatus.visibility    = View.VISIBLE
-
-        val idempotencyKey = buildIdempotencyKey()
-
-        lifecycleScope.launch {
-            runCatching {
-                ConsumerApiClient.p2pPay(
-                    p2pToken        = request.p2pToken,
-                    payeeConsumerId = null,
-                    amountCents     = amountCents.toInt(),
-                    idempotencyKey  = idempotencyKey,
-                    timestamp       = System.currentTimeMillis(),
-                    source          = "P2P_NFC",
-                )
-            }.onSuccess { resp ->
-                tvStatus.text = "Check your phone for M-Pesa PIN prompt…"
-                pollStatus(resp.txnId, progress, tvStatus)
-            }.onFailure { e ->
-                progress.visibility  = View.GONE
-                tvStatus.text        = "Payment failed: ${e.message}"
-                btnConfirm.isEnabled = true
-                btnCancel.isEnabled  = true
-            }
+    private fun attemptPayment(amountCents: Int) {
+        val request = pendingP2pRequest ?: return
+        sentAmountCents = amountCents
+        
+        // Security: Biometric for high value
+        if (amountCents > 500000 && BiometricGate.isAvailable(this)) {
+            BiometricGate.prompt(this,
+                subtitle = "Confirm KSh ${"%.2f".format(amountCents/100.0)} P2P payment",
+                onSuccess = { viewModel.p2pPay(request.p2pToken, null, amountCents, "P2P_NFC") },
+                onFailure = { msg -> Toast.makeText(this, msg, Toast.LENGTH_LONG).show() },
+                onCancel = {}
+            )
+        } else {
+            viewModel.p2pPay(request.p2pToken, null, amountCents, "P2P_NFC")
         }
-    }
-
-    private fun pollStatus(txnId: String, progressBar: ProgressBar, tvStatus: TextView) {
-        var elapsed = 0
-        val timeout = 90
-
-        object : android.os.CountDownTimer(timeout * 1_000L, 3_000L) {
-            override fun onTick(ms: Long) {
-                elapsed += 3
-                tvStatus.text = "Waiting for M-Pesa… (${timeout - elapsed}s)"
-                lifecycleScope.launch {
-                    runCatching { ConsumerApiClient.getTransactionStatus(txnId) }
-                        .onSuccess { s ->
-                            when (s.status) {
-                                "CONFIRMED" -> {
-                                    cancel()
-                                    progressBar.visibility = View.GONE
-                                    val payee = pendingP2pRequest?.displayName ?: "friend"
-                                    tvStatus.text = "✓ KSh ${"%.2f".format((s.amountCents ?: 0) / 100.0)} sent to $payee\nM-Pesa ref: ${s.mpesaRef ?: ""}"
-                                    lifecycleScope.launch { delay(3_000); finish() }
-                                }
-                                "DECLINED", "FAILED" -> {
-                                    cancel()
-                                    progressBar.visibility = View.GONE
-                                    tvStatus.text = "Payment ${s.status.lowercase()} — please try again"
-                                }
-                            }
-                        }
-                }
-            }
-            override fun onFinish() {
-                progressBar.visibility = View.GONE
-                tvStatus.text = "Timed out — check your transaction history"
-            }
-        }.start()
-    }
-
-    private fun buildIdempotencyKey(): String {
-        val bytes = ByteArray(16)
-        SecureRandom().nextBytes(bytes)
-        return bytes.joinToString("") { "%02x".format(it) }
     }
 }

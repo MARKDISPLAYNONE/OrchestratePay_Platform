@@ -11,37 +11,25 @@ import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.orchestratepay.consumer.R
-import com.orchestratepay.consumer.api.ConsumerApiClient
 import com.orchestratepay.consumer.db.ConsumerSessionManager
 import com.orchestratepay.consumer.nfc.MerchantHceReader
+import com.orchestratepay.consumer.ui.viewmodel.HcePaymentState
+import com.orchestratepay.consumer.ui.viewmodel.MerchantHcePayViewModel
+import com.orchestratepay.consumer.util.BiometricGate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.security.SecureRandom
 
-/**
- * MerchantHcePayActivity — handles Scenario 5.
- *
- * Consumer opens this screen, taps their phone to the merchant's phone.
- * MerchantHceReader reads the merchant's HCE payload, extracts the payment
- * request (merchantId, amount), and the consumer confirms to pay.
- *
- * Entry points:
- *   - "Tap to Merchant's Phone" button in TapToPayFragment
- *   - ACTION_TECH_DISCOVERED NFC intent (if registered in manifest with IsoDep filter)
- *
- * Flow:
- *   Waiting state → consumer taps phone to merchant's phone →
- *   NFC ISO-DEP read → show confirmation dialog (amount + merchant name) →
- *   consumer taps Confirm → POST /consumers/pay/{merchantId} →
- *   poll status → show result
- */
 class MerchantHcePayActivity : AppCompatActivity() {
 
+    private val viewModel: MerchantHcePayViewModel by viewModels()
     private var nfcAdapter: NfcAdapter? = null
     private var pendingRequest: MerchantHceReader.MerchantPaymentRequest? = null
 
@@ -60,8 +48,50 @@ class MerchantHcePayActivity : AppCompatActivity() {
             finish(); return
         }
 
-        findViewById<TextView>(R.id.tv_instruction).text =
-            "Hold this phone to the merchant's phone to read the payment request."
+        setupViewModel()
+    }
+
+    private fun setupViewModel() {
+        val progressBar = findViewById<ProgressBar>(R.id.progress_bar)
+        val tvStatus    = findViewById<TextView>(R.id.tv_status)
+        val btnConfirm  = findViewById<Button>(R.id.btn_confirm)
+        val btnCancel   = findViewById<Button>(R.id.btn_cancel)
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.state.collect { state ->
+                    when (state) {
+                        is HcePaymentState.Idle -> {
+                            progressBar.visibility = View.GONE
+                            tvStatus.visibility = View.GONE
+                        }
+                        is HcePaymentState.Processing -> {
+                            btnConfirm.isEnabled = false
+                            btnCancel.isEnabled = false
+                            progressBar.visibility = View.VISIBLE
+                            tvStatus.text = "Sending payment request…"
+                            tvStatus.visibility = View.VISIBLE
+                        }
+                        is HcePaymentState.WaitingForMpesa -> {
+                            tvStatus.text = "Waiting for M-Pesa… (${state.secondsRemaining}s)"
+                        }
+                        is HcePaymentState.Success -> {
+                            progressBar.visibility = View.GONE
+                            val amountKsh = "%.2f".format((state.status.amountCents ?: 0) / 100.0)
+                            tvStatus.text = "✓ KSh $amountKsh paid successfully"
+                            delay(3000)
+                            finish()
+                        }
+                        is HcePaymentState.Error -> {
+                            progressBar.visibility = View.GONE
+                            tvStatus.text = state.message
+                            btnConfirm.isEnabled = state.canRetry
+                            btnCancel.isEnabled = true
+                        }
+                    }
+                }
+            }
+        }
     }
 
     override fun onResume() {
@@ -72,7 +102,6 @@ class MerchantHcePayActivity : AppCompatActivity() {
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        // Listen for ISO-DEP (HCE) tags — not just NDEF
         val techFilter = arrayOf(arrayOf(android.nfc.tech.IsoDep::class.java.name))
         nfcAdapter?.enableForegroundDispatch(this, pending, null, techFilter)
     }
@@ -94,15 +123,13 @@ class MerchantHcePayActivity : AppCompatActivity() {
         tag?.let { readMerchantHce(it) }
     }
 
-    // ── NFC read ──────────────────────────────────────────────────────────────
-
     private fun readMerchantHce(tag: Tag) {
         lifecycleScope.launch(Dispatchers.IO) {
             val request = runCatching { MerchantHceReader.read(tag) }.getOrNull()
             withContext(Dispatchers.Main) {
                 if (request == null) {
                     Toast.makeText(this@MerchantHcePayActivity,
-                        "Could not read payment request — ask merchant to re-activate",
+                        "Could not read payment request",
                         Toast.LENGTH_LONG).show()
                 } else {
                     showConfirmation(request)
@@ -110,8 +137,6 @@ class MerchantHcePayActivity : AppCompatActivity() {
             }
         }
     }
-
-    // ── Confirmation UI ───────────────────────────────────────────────────────
 
     private fun showConfirmation(request: MerchantHceReader.MerchantPaymentRequest) {
         pendingRequest = request
@@ -128,90 +153,20 @@ class MerchantHcePayActivity : AppCompatActivity() {
         btnConfirm.visibility  = View.VISIBLE
         btnCancel.visibility   = View.VISIBLE
 
-        btnConfirm.setOnClickListener { initiatePayment(request) }
+        btnConfirm.setOnClickListener { attemptPayment(request) }
         btnCancel.setOnClickListener  { finish() }
     }
 
-    // ── Payment ───────────────────────────────────────────────────────────────
-
-    private fun initiatePayment(request: MerchantHceReader.MerchantPaymentRequest) {
-        val progressBar = findViewById<ProgressBar>(R.id.progress_bar)
-        val tvStatus    = findViewById<TextView>(R.id.tv_status)
-        val btnConfirm  = findViewById<Button>(R.id.btn_confirm)
-        val btnCancel   = findViewById<Button>(R.id.btn_cancel)
-
-        btnConfirm.isEnabled  = false
-        btnCancel.isEnabled   = false
-        progressBar.visibility = View.VISIBLE
-        tvStatus.text          = "Sending payment request…"
-        tvStatus.visibility    = View.VISIBLE
-
-        val idempotencyKey = buildIdempotencyKey()
-
-        lifecycleScope.launch {
-            runCatching {
-                ConsumerApiClient.payMerchantViaHce(
-                    merchantId       = request.merchantId,
-                    amountCents      = request.amountCents.toInt(),
-                    idempotencyKey   = idempotencyKey,
-                    timestamp        = System.currentTimeMillis(),
-                    merchantHceToken = request.token,
-                )
-            }.onSuccess { resp ->
-                tvStatus.text = "Check your phone for M-Pesa PIN prompt…"
-                pollTransactionStatus(resp.transactionId, progressBar, tvStatus)
-            }.onFailure { e ->
-                progressBar.visibility = View.GONE
-                tvStatus.text = "Payment failed: ${e.message}"
-                btnConfirm.isEnabled = true
-                btnCancel.isEnabled  = true
-            }
+    private fun attemptPayment(request: MerchantHceReader.MerchantPaymentRequest) {
+        if (request.amountCents > 500000 && BiometricGate.isAvailable(this)) {
+            BiometricGate.prompt(this,
+                subtitle = "Confirm KSh ${"%.2f".format(request.amountCents/100.0)} payment to ${request.merchantName}",
+                onSuccess = { viewModel.initiatePayment(request.merchantId, request.amountCents.toInt(), request.token) },
+                onFailure = { msg -> Toast.makeText(this, msg, Toast.LENGTH_LONG).show() },
+                onCancel = {}
+            )
+        } else {
+            viewModel.initiatePayment(request.merchantId, request.amountCents.toInt(), request.token)
         }
-    }
-
-    private fun pollTransactionStatus(
-        txnId: String,
-        progressBar: ProgressBar,
-        tvStatus: TextView
-    ) {
-        var elapsed = 0
-        val timeout = 90
-
-        val timer = object : android.os.CountDownTimer(timeout * 1_000L, 3_000L) {
-            override fun onTick(ms: Long) {
-                elapsed += 3
-                tvStatus.text = "Waiting for M-Pesa… (${timeout - elapsed}s)"
-                lifecycleScope.launch {
-                    runCatching { ConsumerApiClient.getTransactionStatus(txnId) }
-                        .onSuccess { status ->
-                            when (status.status) {
-                                "CONFIRMED" -> {
-                                    cancel()
-                                    progressBar.visibility = View.GONE
-                                    val amountKsh = "%.2f".format((status.amountCents ?: 0) / 100.0)
-                                    tvStatus.text = "✓ KSh $amountKsh paid\nM-Pesa ref: ${status.mpesaReceipt ?: ""}"
-                                    lifecycleScope.launch { delay(3_000); finish() }
-                                }
-                                "DECLINED", "FAILED" -> {
-                                    cancel()
-                                    progressBar.visibility = View.GONE
-                                    tvStatus.text = "Payment ${status.status.lowercase()} — please try again"
-                                }
-                            }
-                        }
-                }
-            }
-            override fun onFinish() {
-                progressBar.visibility = View.GONE
-                tvStatus.text = "Timed out — check your transaction history"
-            }
-        }
-        timer.start()
-    }
-
-    private fun buildIdempotencyKey(): String {
-        val bytes = ByteArray(16)
-        SecureRandom().nextBytes(bytes)
-        return bytes.joinToString("") { "%02x".format(it) }
     }
 }

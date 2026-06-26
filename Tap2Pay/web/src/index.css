@@ -1,0 +1,250 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design tokens ─────────────────────────────────────────────────────────── */
+:root {
+  --void:           #05070F;
+  --navy-900:       #080F1E;
+  --navy-800:       #0A1628;
+  --navy-700:       #0F1F3D;
+  --navy-600:       #142947;
+  --electric-blue:  #00AFFF;
+  --neon-blue:      #00D4FF;
+  --chrome:         #8B9BB4;
+  --chrome-light:   #C8D4E8;
+  --success:        #00E5A0;
+  --error:          #FF4D6D;
+  --warning:        #FFB300;
+
+  --glow-blue:      0 0 20px rgba(0,175,255,0.4), 0 0 60px rgba(0,175,255,0.1);
+  --glow-sm:        0 0 12px rgba(0,175,255,0.25);
+  --card-bg:        rgba(8,15,30,0.75);
+  --card-border:    rgba(0,175,255,0.12);
+  --card-shadow:    0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────────── */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--void);
+    color: #e2e8f0;
+  }
+
+  * { box-sizing: border-box; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--navy-900); }
+  ::-webkit-scrollbar-thumb { background: rgba(0,175,255,0.25); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,175,255,0.45); }
+
+  /* Selection */
+  ::selection { background: rgba(0,175,255,0.25); color: white; }
+}
+
+/* ── Component utilities ────────────────────────────────────────────────────── */
+@layer components {
+  /* Glass card */
+  .glass {
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--card-border);
+    box-shadow: var(--card-shadow);
+  }
+
+  .glass-bright {
+    background: rgba(10,22,40,0.85);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(0,175,255,0.18);
+    box-shadow: 0 0 40px rgba(0,175,255,0.06), 0 20px 60px rgba(0,0,0,0.6);
+  }
+
+  /* Electric blue glow on interactive elements */
+  .glow-ring {
+    box-shadow: 0 0 0 1px rgba(0,175,255,0.4), 0 0 16px rgba(0,175,255,0.2);
+  }
+
+  /* Input style */
+  .input-dark {
+    @apply w-full rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600
+           bg-white/[0.04] border border-white/10
+           focus:outline-none focus:border-electric/60 focus:ring-2 focus:ring-electric/15
+           transition-all duration-200;
+  }
+
+  /* Primary button */
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-5 py-2.5 rounded-xl
+           text-sm font-semibold text-white tracking-wide
+           bg-gradient-to-r from-electric to-blue-600
+           hover:from-neon hover:to-electric
+           active:scale-[0.98]
+           disabled:opacity-40 disabled:cursor-not-allowed
+           transition-all duration-200;
+    box-shadow: 0 4px 18px rgba(0,175,255,0.3);
+  }
+
+  /* Ghost button */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center px-5 py-2.5 rounded-xl
+           text-sm font-medium text-slate-400
+           border border-white/10
+           hover:border-electric/30 hover:text-white hover:bg-electric/5
+           active:scale-[0.98]
+           transition-all duration-200;
+  }
+
+  /* Danger button */
+  .btn-danger {
+    @apply inline-flex items-center justify-center px-5 py-2.5 rounded-xl
+           text-sm font-semibold text-white
+           bg-gradient-to-r from-red-600 to-red-700
+           hover:from-red-500 hover:to-red-600
+           disabled:opacity-40 disabled:cursor-not-allowed
+           transition-all duration-200;
+  }
+
+  /* Status badges */
+  .badge-confirmed { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20; }
+  .badge-pending   { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20; }
+  .badge-failed    { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/20; }
+  .badge-default   { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/5 text-slate-400 border border-white/10; }
+  .badge-blue      { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-electric/15 text-electric border border-electric/20; }
+
+  /* Table row */
+  .table-row-dark {
+    @apply border-b border-white/[0.04] hover:bg-white/[0.03] cursor-pointer transition-colors duration-150;
+  }
+
+  /* Form section */
+  .form-label {
+    @apply block text-xs font-medium text-slate-400 mb-1.5 tracking-widest uppercase;
+  }
+
+  /* Neon divider */
+  .divider-blue {
+    @apply h-px w-full;
+    background: linear-gradient(90deg, transparent, rgba(0,175,255,0.3), transparent);
+  }
+}
+
+/* ── Particle canvas bg ──────────────────────────────────────────────────────── */
+.particles-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(0,175,255,0.6);
+  animation: particle-drift linear infinite;
+}
+
+@keyframes particle-drift {
+  0%   { transform: translate(0, 100vh) scale(0);  opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 0.5; }
+  100% { transform: translate(var(--dx, 0px), -20px) scale(1.5); opacity: 0; }
+}
+
+/* Light rays */
+.light-ray {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 60vh;
+  background: linear-gradient(to bottom, rgba(0,175,255,0.15), transparent);
+  animation: ray-pulse 4s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+@keyframes ray-pulse {
+  0%, 100% { opacity: 0.3; transform: scaleX(1); }
+  50%       { opacity: 0.8; transform: scaleX(2); }
+}
+
+/* ── Splash screen ───────────────────────────────────────────────────────────── */
+.splash-container {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #05070F;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  animation: splash-exit 0.7s 2.8s both;
+}
+
+@keyframes splash-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes splash-exit {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes icon-rise {
+  from { opacity: 0; transform: scale(0.72) translateY(24px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+@keyframes icon-glow {
+  0%   { box-shadow: 0 0 0   0   rgba(0,175,255,0); }
+  40%  { box-shadow: 0 0 40px 12px rgba(0,175,255,0.35), 0 0 80px 24px rgba(0,175,255,0.12); }
+  100% { box-shadow: 0 0 20px  4px rgba(0,175,255,0.15), 0 0 40px  8px rgba(0,175,255,0.06); }
+}
+
+@keyframes icon-float {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes icon-exit {
+  from { transform: scale(1);    filter: brightness(1); }
+  to   { transform: scale(1.22); filter: brightness(2) drop-shadow(0 0 48px rgba(0,175,255,1)) drop-shadow(0 0 80px rgba(0,175,255,0.5)); }
+}
+
+/* ── Void background ─────────────────────────────────────────────────────────── */
+.void-bg {
+  background: var(--void);
+  background-image:
+    radial-gradient(ellipse at 20% 20%, rgba(0,80,160,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(0,60,120,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 0%,  rgba(0,175,255,0.04) 0%, transparent 40%);
+}
+
+/* ── Recharts dark theme overrides ──────────────────────────────────────────── */
+.recharts-text { fill: #64748b !important; }
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line { stroke: rgba(255,255,255,0.04) !important; }
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: rgba(8,15,30,0.95) !important;
+  border: 1px solid rgba(0,175,255,0.2) !important;
+  border-radius: 12px !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+}
+
+/* ── Print styles ────────────────────────────────────────────────────────────── */
+@media print {
+  body > * { display: none !important; }
+  #receipt-printable { display: block !important; box-shadow: none; border: none; }
+}

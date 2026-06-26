@@ -32,6 +32,16 @@
         <activity android:name=".ui.HomeActivity" android:exported="false"
             android:launchMode="singleTop" />
 
+        <activity android:name=".ui.P2PPayActivity" android:exported="false"
+            android:parentActivityName=".ui.HomeActivity" />
+
+        <activity android:name=".ui.P2PSendActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity android:name=".ui.P2PQrScannerActivity" android:exported="false" />
+
+        <activity android:name=".ui.MerchantHcePayActivity" android:exported="false" />
+
         <!--
             NfcTagPaymentActivity — handles taps on merchant display tags
             (https://orchestratepay.co.ke/pay/{merchantId}).

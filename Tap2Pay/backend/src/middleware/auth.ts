@@ -30,12 +30,13 @@ export const DEVICE_CACHE_TTL_S = 9 * 60 * 60  // 9 h — covers the 8 h JWT lif
 export type Role = 'MERCHANT' | 'CONSUMER' | 'ADMIN'
 
 export interface MerchantPayload {
-  sub:      string   // merchantId (UUID)
-  name:     string
-  role:     Role
-  deviceId: string
-  iat:      number
-  exp:      number
+  sub:             string   // merchantId (UUID)
+  name:            string
+  role:            Role
+  deviceId:        string
+  approvalStatus?: string   // present in tokens issued after approval-gate was added
+  iat:             number
+  exp:             number
 }
 
 export interface ConsumerPayload {
@@ -91,6 +92,25 @@ export function requireConsumerAuth(req: Request, res: Response, next: NextFunct
   }
 
   req.consumer = payload as ConsumerPayload
+  next()
+}
+
+// ─── requireApprovedMerchant ─────────────────────────────────────────────────
+// Must run after requireAuth (which populates req.merchant).
+// Blocks PENDING_REVIEW / REJECTED / SUSPENDED merchants from payment-initiating
+// routes while still allowing them to reach KYC upload routes.
+// Tokens issued before this field was added have approvalStatus === undefined;
+// those were issued only to APPROVED merchants (the refresh path already checked),
+// so undefined is treated as APPROVED for backwards compatibility.
+
+export function requireApprovedMerchant(req: Request, res: Response, next: NextFunction) {
+  const status = req.merchant!.approvalStatus
+  if (status && status !== 'APPROVED') {
+    return res.status(403).json({
+      error: 'Account not yet approved — complete KYC to start accepting payments',
+      status,
+    })
+  }
   next()
 }
 

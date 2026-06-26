@@ -90,21 +90,35 @@ router.post('/redeem', requireAuth, async (req: Request, res: Response) => {
     const points = parseInt(redeemPoints ?? '0', 10)
     const stamps = parseInt(redeemStamps ?? '0', 10)
 
-    // Check balance
-    const { rows: balRows } = await db.query(
-        `SELECT points_balance, stamps_balance FROM loyalty_balances
-         WHERE consumer_id=$1 AND merchant_id=$2`,
-        [consumerId, merchantId]
-    )
-    if (balRows.length === 0) return res.status(404).json({ error: 'No loyalty account found' })
-
-    const bal = balRows[0]
-    if (points > bal.points_balance) return res.status(409).json({ error: 'Insufficient points' })
-    if (stamps > bal.stamps_balance) return res.status(409).json({ error: 'Insufficient stamps' })
-
     const client = await db.connect()
     try {
         await client.query('BEGIN')
+
+        // Lock the row inside the transaction so concurrent redemptions can't both
+        // pass the balance check against the same pre-deduction value (TOCTOU race).
+        const { rows: balRows } = await client.query(
+            `SELECT points_balance, stamps_balance FROM loyalty_balances
+             WHERE consumer_id=$1 AND merchant_id=$2
+             FOR UPDATE`,
+            [consumerId, merchantId]
+        )
+        if (balRows.length === 0) {
+            await client.query('ROLLBACK')
+            client.release()
+            return res.status(404).json({ error: 'No loyalty account found' })
+        }
+
+        const bal = balRows[0]
+        if (points > bal.points_balance) {
+            await client.query('ROLLBACK')
+            client.release()
+            return res.status(409).json({ error: 'Insufficient points' })
+        }
+        if (stamps > bal.stamps_balance) {
+            await client.query('ROLLBACK')
+            client.release()
+            return res.status(409).json({ error: 'Insufficient stamps' })
+        }
 
         await client.query(`
             UPDATE loyalty_balances SET

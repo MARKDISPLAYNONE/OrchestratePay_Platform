@@ -12,10 +12,11 @@
  * header matching the ADMIN_SECRET environment variable.
  * In production, this call originates from our internal onboarding tool.
  */
-import { Router, Request, Response, NextFunction } from 'express'
+import { Router, Request, Response } from 'express'
 import bcrypt from 'bcrypt'
 import { db } from '../db/index'
 import { requireAuth } from '../middleware/auth'
+import { requireAdmin } from './admin'
 import { validate } from '../middleware/validate'
 import { logger } from '../util/logger'
 import Joi from 'joi'
@@ -42,17 +43,6 @@ const updateProfileSchema = Joi.object({
   mpesaAccountRef:  Joi.string().max(20).optional().allow('', null),
   kraPin:           Joi.string().min(10).max(15).optional().allow('', null),
 }).min(1)  // at least one field must be provided
-
-// ─── Admin guard ──────────────────────────────────────────────────────────────
-
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const secret = req.headers['x-admin-secret']
-  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
-    logger.warn('Unauthorised merchant registration attempt', { ip: req.ip, requestId: req.id })
-    return res.status(403).json({ error: 'Admin access required' })
-  }
-  next()
-}
 
 // ─── POST /api/v1/merchants ───────────────────────────────────────────────────
 

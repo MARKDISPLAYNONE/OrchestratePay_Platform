@@ -62,6 +62,11 @@ export function initWsServer(httpServer: Server): void {
 
     // Route to the appropriate handler based on connection type
     if (consumerId) {
+      const p = payload as { sub?: string }
+      if (!p.sub || p.sub !== consumerId) {
+        ws.close(1008, 'Token does not match requested consumer')
+        return
+      }
       handleConsumerConnection(ws, consumerId, payload)
     } else if (txnId) {
       handleTerminalConnection(ws, txnId)

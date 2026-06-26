@@ -10,6 +10,7 @@ import Joi from 'joi'
 import { db } from '../db/index'
 import { logger } from '../util/logger'
 import { requireAuth } from '../middleware/auth'
+import { requireAdmin } from './admin'
 import { validate } from '../middleware/validate'
 
 const router = Router()
@@ -64,6 +65,25 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   }
 })
 
+// ─── GET /api/v1/settlements/account/me ──────────────────────────────────────
+// Returns the merchant's primary settlement account.
+// MUST be registered before GET /:id so Express doesn't swallow "account" as an id param.
+
+router.get('/account/me', requireAuth, async (req: Request, res: Response) => {
+  const merchantId = req.merchant!.sub
+  try {
+    const { rows } = await db.query(
+      `SELECT * FROM settlement_accounts
+        WHERE merchant_id = $1 AND is_primary = true AND active = true
+        LIMIT 1`,
+      [merchantId]
+    )
+    res.json(rows[0] ?? null)
+  } catch (_err: unknown) {
+    res.status(500).json({ error: 'Failed to fetch settlement account' })
+  }
+})
+
 // ─── GET /api/v1/settlements/:id ──────────────────────────────────────────────
 // Single settlement with its constituent transactions.
 
@@ -93,24 +113,6 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   } catch (err: unknown) {
     logger.error('Failed to fetch settlement', { error: (err as Error).message })
     res.status(500).json({ error: 'Failed to fetch settlement' })
-  }
-})
-
-// ─── GET /api/v1/settlements/account/me ──────────────────────────────────────
-// Returns the merchant's primary settlement account.
-
-router.get('/account/me', requireAuth, async (req: Request, res: Response) => {
-  const merchantId = req.merchant!.sub
-  try {
-    const { rows } = await db.query(
-      `SELECT * FROM settlement_accounts
-        WHERE merchant_id = $1 AND is_primary = true AND active = true
-        LIMIT 1`,
-      [merchantId]
-    )
-    res.json(rows[0] ?? null)
-  } catch (_err: unknown) {
-    res.status(500).json({ error: 'Failed to fetch settlement account' })
   }
 })
 
@@ -149,6 +151,8 @@ router.post('/account', requireAuth, validate(settlementAccountSchema), async (r
 
 // ─── Admin: GET /api/v1/admin/settlements ─────────────────────────────────────
 export const adminSettlementRouter = Router()
+
+adminSettlementRouter.use(requireAdmin)
 
 adminSettlementRouter.get('/', async (req: Request, res: Response) => {
   const status = req.query.status as string | undefined

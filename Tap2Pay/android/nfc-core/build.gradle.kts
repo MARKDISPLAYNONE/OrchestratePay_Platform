@@ -9,7 +9,6 @@ android {
 
     defaultConfig {
         minSdk     = 26
-        targetSdk  = 35
         // Library doesn't have a versionCode/versionName — consuming app sets these
         consumerProguardFiles("consumer-rules.pro")
     }
@@ -20,6 +19,12 @@ android {
     }
 
     kotlinOptions { jvmTarget = "17" }
+    lint {
+        targetSdk = 35
+    }
+    testOptions {
+        targetSdk = 35
+    }
 }
 
 dependencies {

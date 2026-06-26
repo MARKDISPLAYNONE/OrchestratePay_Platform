@@ -2,8 +2,9 @@ import request from 'supertest'
 import express from 'express'
 import jwt from 'jsonwebtoken'
 
-process.env.NODE_ENV   = 'test'
-process.env.JWT_SECRET = 'test-secret'
+process.env.NODE_ENV    = 'test'
+process.env.JWT_SECRET  = 'test-secret'
+process.env.ADMIN_SECRET = 'test-admin-secret'
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
 
@@ -29,7 +30,7 @@ jest.mock('../util/nfc-signing', () => ({
   deriveMerchantSigningKey: jest.fn().mockReturnValue('key'),
 }))
 
-import refundsRouter from '../routes/refunds'
+import refundsRouter, { adminRefundRouter } from '../routes/refunds'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -58,7 +59,17 @@ function buildApp() {
   const app = express()
   app.use(express.json())
   app.use('/api/v1/refunds', refundsRouter)
-  app.use('/api/v1/admin',   refundsRouter)
+  return app
+}
+
+function buildAdminApp(injectSecret = false) {
+  const app = express()
+  app.use(express.json())
+  app.use('/api/v1/refunds', refundsRouter)
+  if (injectSecret) {
+    app.use((_req, _res, next) => { _req.headers['x-admin-secret'] = process.env.ADMIN_SECRET!; next() })
+  }
+  app.use('/api/v1/admin/refunds', adminRefundRouter)
   return app
 }
 
@@ -344,14 +355,14 @@ describe('GET /api/v1/refunds/:id', () => {
 
 describe('PATCH /api/v1/admin/refunds/:id', () => {
   it('returns 401 without auth', async () => {
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(false))
       .patch(`/api/v1/admin/refunds/${REFUND_ID}`)
       .send({ action: 'APPROVE' })
     expect(res.status).toBe(401)
   })
 
   it('returns 403 when called with a merchant token', async () => {
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(false))
       .patch(`/api/v1/admin/refunds/${REFUND_ID}`)
       .set('Authorization', `Bearer ${merchantToken()}`)
       .send({ action: 'APPROVE' })
@@ -359,17 +370,15 @@ describe('PATCH /api/v1/admin/refunds/:id', () => {
   })
 
   it('returns 400 for invalid action value', async () => {
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/refunds/${REFUND_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ action: 'CANCEL' })
     expect(res.status).toBe(400)
   })
 
   it('returns 400 when action is missing', async () => {
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/refunds/${REFUND_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({})
     expect(res.status).toBe(400)
   })
@@ -377,9 +386,8 @@ describe('PATCH /api/v1/admin/refunds/:id', () => {
   it('returns 404 when refund does not exist', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [] })
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/refunds/${REFUND_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ action: 'APPROVE' })
 
     expect(res.status).toBe(404)
@@ -392,9 +400,8 @@ describe('PATCH /api/v1/admin/refunds/:id', () => {
       .mockResolvedValueOnce({ rows: [SAMPLE_REFUND] })
       .mockResolvedValueOnce({ rows: [rejectedRefund] })
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/refunds/${REFUND_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ action: 'REJECT', notes: 'Policy violation' })
 
     expect(res.status).toBe(200)
@@ -411,9 +418,8 @@ describe('PATCH /api/v1/admin/refunds/:id', () => {
       .mockResolvedValueOnce({ rows: [SAMPLE_REFUND] })
       .mockResolvedValueOnce({ rows: [rejectedRefund] })
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/refunds/${REFUND_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ action: 'REJECT' })
 
     expect(res.status).toBe(200)
@@ -429,9 +435,8 @@ describe('PATCH /api/v1/admin/refunds/:id', () => {
       .mockResolvedValueOnce({ rows: [processingRefund] })           // UPDATE → PROCESSING
     mockInitiateB2c.mockResolvedValueOnce({ requestId: 'b2c-req-1' })
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/refunds/${REFUND_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ action: 'APPROVE' })
 
     expect(res.status).toBe(200)
@@ -456,9 +461,8 @@ describe('PATCH /api/v1/admin/refunds/:id', () => {
       .mockResolvedValueOnce({ rows: [failedRefund] })               // UPDATE → FAILED
     mockInitiateB2c.mockRejectedValueOnce(new Error('Network error'))
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/refunds/${REFUND_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ action: 'APPROVE' })
 
     expect(res.status).toBe(502)
@@ -469,9 +473,8 @@ describe('PATCH /api/v1/admin/refunds/:id', () => {
   it('returns 500 on unexpected DB error during action processing', async () => {
     mockQuery.mockRejectedValueOnce(new Error('DB crash'))
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/refunds/${REFUND_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ action: 'APPROVE' })
 
     expect(res.status).toBe(500)

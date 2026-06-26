@@ -237,6 +237,8 @@ router.post('/pay/:merchantId', validate(consumerPaySchema), async (req: Request
   const { amountCents, idempotencyKey, _timestamp, currency = 'KES' } = req.body
   const consumerId = req.consumer!.sub
 
+  try {
+
   // ─── Idempotency ─────────────────────────────────────────────────────────
   const cacheKey = `idempotency:${idempotencyKey}`
   const cached = await redis.get(cacheKey)
@@ -359,6 +361,11 @@ router.post('/pay/:merchantId', validate(consumerPaySchema), async (req: Request
   })
 
   res.status(201).json(pendingResponse)
+
+  } catch (err: unknown) {
+    logger.error('Consumer pay failed', { merchantId, consumerId, error: (err as Error).message })
+    if (!res.headersSent) res.status(500).json({ error: 'Payment processing failed' })
+  }
 })
 
 // ─── POST /api/v1/consumers/p2p-token ────────────────────────────────────────
@@ -412,6 +419,8 @@ router.post('/p2p-pay', validate(p2pPaySchema), async (req: Request, res: Respon
   const payerConsumerId = req.consumer!.sub
   const { p2pToken, payeeConsumerId: bodyPayeeId, amountCents,
           idempotencyKey, _timestamp, source, currency = 'KES' } = req.body
+
+  try {
 
   // ─── Idempotency ─────────────────────────────────────────────────────────
   const cacheKey = `idempotency:${idempotencyKey}`
@@ -582,6 +591,11 @@ router.post('/p2p-pay', validate(p2pPaySchema), async (req: Request, res: Respon
 
   logger.info('P2P STK Push sent', { txnId, p2pTxnId, checkoutRequestId: stkResult.checkoutRequestId })
   res.status(201).json(pendingResponse)
+
+  } catch (err: unknown) {
+    logger.error('P2P pay failed', { payerConsumerId, error: (err as Error).message })
+    if (!res.headersSent) res.status(500).json({ error: 'Payment processing failed' })
+  }
 })
 
 // ─── GET /api/v1/consumers/transactions/:txnId/status ────────────────────────

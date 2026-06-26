@@ -18,10 +18,10 @@ import { initiateB2cPayout } from '../integrations/daraja'
 
 const FEE_BPS      = parseInt(process.env.SETTLEMENT_FEE_BPS  ?? '150')  // 1.5%
 const MIN_CENTS    = parseInt(process.env.SETTLEMENT_MIN_KES   ?? '100') * 100
-const LOCK_TTL_MS  = 5 * 60 * 1000  // 5 min — settlement should complete well within this
+const LOCK_TTL_S   = 5 * 60  // 5 min — settlement should complete well within this
 
 export async function runSettlementJob(): Promise<void> {
-  await withDistributedLock('settlement-job', LOCK_TTL_MS, async () => {
+  await withDistributedLock('settlement-job', LOCK_TTL_S, async () => {
     logger.info('Settlement job started')
 
     const periodEnd   = new Date()

@@ -1,8 +1,8 @@
 /**
- * merchant-rate-limit.ts — Redis sliding-window rate limiter keyed on merchantId.
+ * merchant-rate-limit.ts — Redis sliding-window rate limiter keyed on source IP.
  *
  * Why Redis instead of the express-rate-limit memory store:
- *   The memory store is per-process. With 2+ backend pods, a merchant can
+ *   The memory store is per-process. With 2+ backend pods, the same IP can
  *   make 100 req/min to pod A AND 100 req/min to pod B — effectively doubling
  *   the limit. The Redis sorted-set approach counts across all pods.
  *
@@ -31,12 +31,12 @@ export function merchantRateLimit(opts: RateLimitOptions) {
   const { max, windowMs, message = 'Too many requests — please slow down' } = opts
 
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    // Prefer merchantId (post-auth) over IP so all terminals of the same merchant
-    // share one bucket, and an unauthenticated flood from one IP doesn't pollute
-    // another merchant's bucket.
-    const key = req.merchant?.sub
-      ? `rate:merchant:${req.merchant.sub}`
-      : `rate:ip:${req.ip ?? 'unknown'}`
+    // Key on IP address. This middleware runs before requireAuth so req.merchant
+    // is not yet populated; using an unverified JWT sub for keying would allow
+    // any caller to forge another merchant's rate-limit bucket (targeted DoS).
+    // IP-based limiting is the safe pre-auth choice — post-auth merchant-scoped
+    // limiting can be layered inside individual routers after requireAuth runs.
+    const key = `rate:ip:${req.ip ?? 'unknown'}`
 
     try {
       const now    = Date.now()

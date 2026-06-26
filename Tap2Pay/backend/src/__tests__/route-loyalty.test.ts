@@ -246,7 +246,14 @@ describe('POST /api/v1/loyalty/redeem', () => {
   })
 
   it('returns 404 when consumer has no loyalty account', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] })
+    const clientMock = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [] })  // BEGIN
+        .mockResolvedValueOnce({ rows: [] })  // SELECT ... FOR UPDATE → no account
+        .mockResolvedValueOnce({ rows: [] }), // ROLLBACK
+      release: jest.fn(),
+    }
+    mockConnect.mockResolvedValueOnce(clientMock)
 
     const res = await request(buildApp())
       .post('/api/v1/loyalty/redeem')
@@ -257,9 +264,14 @@ describe('POST /api/v1/loyalty/redeem', () => {
   })
 
   it('returns 409 when points balance is insufficient', async () => {
-    mockQuery.mockResolvedValueOnce({
-      rows: [{ points_balance: 10, stamps_balance: 0 }],
-    })
+    const clientMock = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [] })  // BEGIN
+        .mockResolvedValueOnce({ rows: [{ points_balance: 10, stamps_balance: 0 }] })  // SELECT ... FOR UPDATE
+        .mockResolvedValueOnce({ rows: [] }), // ROLLBACK
+      release: jest.fn(),
+    }
+    mockConnect.mockResolvedValueOnce(clientMock)
 
     const res = await request(buildApp())
       .post('/api/v1/loyalty/redeem')
@@ -271,9 +283,14 @@ describe('POST /api/v1/loyalty/redeem', () => {
   })
 
   it('returns 409 when stamps balance is insufficient', async () => {
-    mockQuery.mockResolvedValueOnce({
-      rows: [{ points_balance: 0, stamps_balance: 2 }],
-    })
+    const clientMock = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [] })  // BEGIN
+        .mockResolvedValueOnce({ rows: [{ points_balance: 0, stamps_balance: 2 }] })  // SELECT ... FOR UPDATE
+        .mockResolvedValueOnce({ rows: [] }), // ROLLBACK
+      release: jest.fn(),
+    }
+    mockConnect.mockResolvedValueOnce(clientMock)
 
     const res = await request(buildApp())
       .post('/api/v1/loyalty/redeem')
@@ -285,16 +302,16 @@ describe('POST /api/v1/loyalty/redeem', () => {
   })
 
   it('redeems points within a DB transaction and returns ok', async () => {
-    // Balance check
-    mockQuery.mockResolvedValueOnce({
-      rows: [{ points_balance: 500, stamps_balance: 0 }],
-    })
-
     const clientMock = {
-      query:   jest.fn().mockResolvedValue({ rows: [] }),
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: [] })  // BEGIN
+        .mockResolvedValueOnce({ rows: [{ points_balance: 500, stamps_balance: 0 }] })  // SELECT ... FOR UPDATE
+        .mockResolvedValueOnce({ rows: [] })  // UPDATE loyalty_balances
+        .mockResolvedValueOnce({ rows: [] })  // INSERT loyalty_ledger
+        .mockResolvedValueOnce({ rows: [] }), // COMMIT
       release: jest.fn(),
     }
-    mockConnect.mockResolvedValue(clientMock)
+    mockConnect.mockResolvedValueOnce(clientMock)
 
     const res = await request(buildApp())
       .post('/api/v1/loyalty/redeem')

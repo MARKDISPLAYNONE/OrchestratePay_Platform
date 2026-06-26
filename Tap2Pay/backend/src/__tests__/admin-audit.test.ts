@@ -79,13 +79,13 @@ describe('POST /api/v1/auth/admin/approve/:merchantId', () => {
     expect(suspendCall).toBeTruthy()
   })
 
-  it('returns 403 without admin secret', async () => {
+  it('returns 401 without admin secret', async () => {
     const app = buildApp()
     const res = await request(app)
       .post('/api/v1/auth/admin/approve/mid-1')
       .send({ action: 'approve' })
 
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(401)
     expect(mockWriteAuditLog).not.toHaveBeenCalled()
   })
 

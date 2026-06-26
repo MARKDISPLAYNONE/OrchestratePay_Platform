@@ -2,13 +2,14 @@
  * middleware-merchant-rate-limit.test.ts — Full coverage for src/middleware/merchant-rate-limit.ts
  *
  * The rate limiter uses a Redis sorted-set sliding window via MULTI/EXEC pipeline.
- * Key is `rate:merchant:{merchantId}` when req.merchant.sub exists, else `rate:ip:{ip}`.
+ * Key is always `rate:ip:{ip}` — IP-based pre-auth limiting is used to avoid the DoS
+ * surface of keying on an unverified JWT sub from the Authorization header.
  *
  * Covers:
  *   - Returns 429 with Retry-After header when count > max
  *   - Calls next() when under limit
- *   - Uses merchantId as key when req.merchant.sub is present
- *   - Falls back to IP when req.merchant is absent
+ *   - Always uses IP-based key regardless of Authorization header
+ *   - Falls back to "unknown" when req.ip is undefined
  *   - Fails open (calls next()) on Redis pipeline error
  *   - Sets X-RateLimit-Limit, X-RateLimit-Remaining headers
  */
@@ -43,8 +44,8 @@ const MERCHANT_ID = 'a1a2a3a4-b1b2-4c1c-d1d2-e1e2e3e4e5e6'
 
 function makeReq(overrides: Record<string, any> = {}): Partial<Request> {
   return {
-    ip:       '127.0.0.1',
-    merchant: undefined,
+    ip:      '127.0.0.1',
+    headers: {},
     ...overrides,
   }
 }
@@ -159,26 +160,26 @@ describe('merchantRateLimit — core behaviour', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('merchantRateLimit — Redis key selection', () => {
-  it('uses merchant-scoped key when req.merchant.sub is present', async () => {
+  it('uses IP-based key (ignores Authorization header to prevent targeted DoS)', async () => {
     execWithCount(1)
 
     const middleware = merchantRateLimit({ max: 100, windowMs: 60_000 })
-    const req  = makeReq({ merchant: { sub: MERCHANT_ID } })
+    // Even with a valid-looking Authorization header, key must be IP-based
+    const req  = makeReq({ ip: '10.0.0.1', headers: { authorization: 'Bearer some.jwt.here' } })
     const res  = makeRes()
     const next = jest.fn()
 
     await middleware(req as Request, res as unknown as Response, next as NextFunction)
 
-    // zremrangebyscore is called with the key as first arg
     const keyUsed = mockPipeline.zremrangebyscore.mock.calls[0][0]
-    expect(keyUsed).toBe(`rate:merchant:${MERCHANT_ID}`)
+    expect(keyUsed).toBe('rate:ip:10.0.0.1')
   })
 
-  it('uses IP-scoped key when req.merchant is absent', async () => {
+  it('uses IP-scoped key for authenticated requests too', async () => {
     execWithCount(1)
 
     const middleware = merchantRateLimit({ max: 100, windowMs: 60_000 })
-    const req  = makeReq({ merchant: undefined, ip: '192.168.1.100' })
+    const req  = makeReq({ merchant: { sub: MERCHANT_ID }, ip: '192.168.1.100' })
     const res  = makeRes()
     const next = jest.fn()
 
@@ -188,11 +189,11 @@ describe('merchantRateLimit — Redis key selection', () => {
     expect(keyUsed).toBe('rate:ip:192.168.1.100')
   })
 
-  it('uses "unknown" when req.merchant is absent and req.ip is undefined', async () => {
+  it('uses "unknown" when req.ip is undefined', async () => {
     execWithCount(1)
 
     const middleware = merchantRateLimit({ max: 100, windowMs: 60_000 })
-    const req  = makeReq({ merchant: undefined, ip: undefined })
+    const req  = makeReq({ ip: undefined })
     const res  = makeRes()
     const next = jest.fn()
 
@@ -339,11 +340,11 @@ describe('merchantRateLimit — fail open on Redis error', () => {
     )
   })
 
-  it('includes the rate limit key in the warning log', async () => {
+  it('includes the IP-based rate limit key in the warning log', async () => {
     mockExec.mockRejectedValueOnce(new Error('Timeout'))
 
     const middleware = merchantRateLimit({ max: 100, windowMs: 60_000 })
-    const req  = makeReq({ merchant: { sub: MERCHANT_ID } })
+    const req  = makeReq({ ip: '10.0.0.5' })
     const res  = makeRes()
     const next = jest.fn()
 
@@ -352,7 +353,7 @@ describe('merchantRateLimit — fail open on Redis error', () => {
     const { logger } = require('../util/logger')
     expect(logger.warn).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ key: `rate:merchant:${MERCHANT_ID}` })
+      expect.objectContaining({ key: 'rate:ip:10.0.0.5' })
     )
   })
 })

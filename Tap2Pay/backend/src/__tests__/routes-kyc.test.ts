@@ -11,8 +11,9 @@
 import request from 'supertest'
 import express from 'express'
 
-process.env.JWT_SECRET = 'test-secret'
-process.env.NODE_ENV   = 'test'
+process.env.JWT_SECRET   = 'test-secret'
+process.env.ADMIN_SECRET = 'test-admin-secret'
+process.env.NODE_ENV     = 'test'
 
 // ── Mock requireAuth ──────────────────────────────────────────────────────────
 const mockRequireAuth = jest.fn()
@@ -60,6 +61,7 @@ function buildApp() {
 function buildAdminApp() {
   const app = express()
   app.use(express.json())
+  app.use((_req, _res, next) => { _req.headers['x-admin-secret'] = process.env.ADMIN_SECRET!; next() })
   app.use('/api/v1/admin/kyc', adminKycRouter)
   return app
 }

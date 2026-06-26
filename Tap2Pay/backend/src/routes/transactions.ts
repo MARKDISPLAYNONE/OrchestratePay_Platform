@@ -24,7 +24,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db/index'
 import { redis } from '../db/redis'
 import { stkPush } from '../integrations/daraja'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, requireApprovedMerchant } from '../middleware/auth'
 import { validate, transactionSchema, merchantHceTokenSchema } from '../middleware/validate'
 import { verifyHceToken } from '../util/hce-token'
 import { convertToKes, isSupportedCurrency } from '../util/fx'
@@ -36,8 +36,8 @@ import { checkMerchantLimits } from '../util/merchant-limits'
 
 const router = Router()
 
-// Apply auth to all transaction routes
-router.use(requireAuth)
+// Apply auth + approval gate to all transaction routes
+router.use(requireAuth, requireApprovedMerchant)
 
 // ─── POST /api/v1/transactions ───────────────────────────────────────────────
 
@@ -525,7 +525,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.post('/merchant-hce-token', validate(merchantHceTokenSchema), async (req: Request, res: Response) => {
   const merchantId = req.merchant!.sub
-  const { amountCents } = req.body
+  const { amountCents, consumerId } = req.body
 
   const merchantResult = await db.query(
     'SELECT id, name FROM merchants WHERE id = $1 AND active = true AND approval_status = $2',
@@ -542,12 +542,13 @@ router.post('/merchant-hce-token', validate(merchantHceTokenSchema), async (req:
   const session = JSON.stringify({
     merchantId,
     merchantName: merchantResult.rows[0].name,
+    consumerId,
     amountCents,
     exp: expiresAt,
   })
   await redis.setex(`merchant:hce:${token}`, TTL_SECONDS, session)
 
-  logger.info('Merchant HCE token issued', { merchantId, amountCents })
+  logger.info('Merchant HCE token issued', { merchantId, consumerId, amountCents })
   res.json({ token, expiresAt, amountCents, merchantName: merchantResult.rows[0].name })
 })
 

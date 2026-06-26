@@ -26,7 +26,7 @@
  *   - Single-device enforcement for merchants (device_id in JWT + Redis cache)
  *   - All auth events written to server_audit_log (CBK compliance)
  */
-import { Router, Request, Response, NextFunction } from 'express'
+import { Router, Request, Response } from 'express'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
@@ -39,6 +39,7 @@ import { deriveMerchantSigningKey } from '../util/nfc-signing'
 import { sendSms } from '../integrations/africas-talking'
 import { writeAuditLog, AuditEvent } from '../util/audit'
 import { runFullScreening } from '../util/aml-screening'
+import { requireAdmin } from './admin'
 
 const router = Router()
 const BCRYPT_ROUNDS = 12
@@ -125,7 +126,7 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
       [deviceId, merchant.id]
     )
 
-    const accessToken  = issueMerchantAccessToken(merchant.id, merchant.name, deviceId)
+    const accessToken  = issueMerchantAccessToken(merchant.id, merchant.name, deviceId, merchant.approval_status)
     const refreshToken = await issueMerchantRefreshToken(merchant.id, req.headers['user-agent'])
     const expiresAt    = Date.now() + MERCHANT_ACCESS_TTL_S * 1000
 
@@ -192,7 +193,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
       [tokenId]
     )
 
-    const newAccessToken  = issueMerchantAccessToken(merchant_id, name, device_id ?? '')
+    const newAccessToken  = issueMerchantAccessToken(merchant_id, name, device_id ?? '', approval_status)
     const newRefreshToken = await issueMerchantRefreshToken(merchant_id, req.headers['user-agent'])
 
     await writeAuditLog({
@@ -282,10 +283,19 @@ router.post('/register', async (req: Request, res: Response) => {
     })
     logger.info('Merchant self-registered (PENDING_REVIEW)', { merchantId: merchant.id })
 
-    // Fire-and-forget initial AML screening — never blocks registration response
-    runFullScreening(merchant.id).catch(err =>
+    // Run AML screening before responding so sanctions status is set before admin review.
+    // Capped at 8 s so a slow external API call can't block merchant registration indefinitely.
+    try {
+      await Promise.race([
+        runFullScreening(merchant.id),
+        new Promise<never>((_, reject) => {
+          const t = setTimeout(() => reject(new Error('AML screening timed out')), 8_000)
+          t.unref()  // don't prevent process exit if this is the last async op
+        }),
+      ])
+    } catch (err) {
       logger.warn('Initial AML screening failed', { error: (err as Error).message })
-    )
+    }
 
     res.status(201).json({
       message:    'Registration received — your account is pending review. You will be contacted within 1-2 business days.',
@@ -479,7 +489,7 @@ router.post('/google', async (req: Request, res: Response) => {
         return res.status(403).json({ error: `Merchant account is not approved yet (status: ${merchant.approval_status})` })
       }
 
-      const token        = issueMerchantAccessToken(merchant.id, merchant.name, 'google-oauth')
+      const token        = issueMerchantAccessToken(merchant.id, merchant.name, 'google-oauth', merchant.approval_status)
       const refreshToken = await issueMerchantRefreshToken(merchant.id, 'google-oauth')
       await writeAuditLog({ event: 'MERCHANT_LOGIN', entityType: 'merchant', entityId: merchant.id, ip: req.ip, detail: { method: 'google' } })
       logger.info('Merchant signed in via Google', { merchantId: merchant.id })
@@ -582,7 +592,7 @@ router.post('/consumer/otp/request', async (req: Request, res: Response) => {
     if (!consumer.active) return res.status(403).json({ error: 'Account is deactivated' })
 
     // Generate 6-digit OTP
-    const otp     = String(Math.floor(100000 + Math.random() * 900000))
+    const otp     = String(crypto.randomInt(100_000, 1_000_000))
     const otpKey  = `otp:${phone}`
     await redis.setex(otpKey, OTP_TTL_S, otp)
     await redis.setex(rateKey, OTP_RATE_TTL_S, '1')
@@ -728,22 +738,20 @@ router.post('/consumer/logout', async (req: Request, res: Response) => {
 
 // ─── Admin: merchant approval ─────────────────────────────────────────────────
 
-function requireAdminSecret(req: Request, res: Response, next: NextFunction) {
-  if (!process.env.ADMIN_SECRET || req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET) {
-    return res.status(403).json({ error: 'Admin access required' })
+router.get('/admin/pending', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, name, email, phone, business_reg_number, id_number, created_at
+       FROM merchants WHERE approval_status = 'PENDING_REVIEW' ORDER BY created_at ASC`
+    )
+    res.json({ merchants: rows })
+  } catch (err: unknown) {
+    logger.error('Failed to fetch pending merchants', { error: (err as Error).message })
+    res.status(500).json({ error: 'Failed to fetch pending merchants' })
   }
-  next()
-}
-
-router.get('/admin/pending', requireAdminSecret, async (_req: Request, res: Response) => {
-  const { rows } = await db.query(
-    `SELECT id, name, email, phone, business_reg_number, id_number, created_at
-     FROM merchants WHERE approval_status = 'PENDING_REVIEW' ORDER BY created_at ASC`
-  )
-  res.json({ merchants: rows })
 })
 
-router.post('/admin/approve/:merchantId', requireAdminSecret, async (req: Request, res: Response) => {
+router.post('/admin/approve/:merchantId', requireAdmin, async (req: Request, res: Response) => {
   const { merchantId } = req.params
   const { action, notes } = req.body
 
@@ -755,28 +763,33 @@ router.post('/admin/approve/:merchantId', requireAdminSecret, async (req: Reques
     return res.status(400).json({ error: 'action must be approve, reject, or suspend' })
   }
 
-  const { rowCount } = await db.query(
-    `UPDATE merchants SET approval_status = $1, review_notes = $2, reviewed_at = NOW(), updated_at = NOW() WHERE id = $3`,
-    [newStatus, notes ?? null, merchantId]
-  )
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE merchants SET approval_status = $1, review_notes = $2, reviewed_at = NOW(), updated_at = NOW() WHERE id = $3`,
+      [newStatus, notes ?? null, merchantId]
+    )
 
-  if ((rowCount ?? 0) === 0) return res.status(404).json({ error: 'Merchant not found' })
+    if ((rowCount ?? 0) === 0) return res.status(404).json({ error: 'Merchant not found' })
 
-  const auditEvent = action === 'approve'
-    ? 'MERCHANT_APPROVED'
-    : action === 'suspend'
-    ? 'MERCHANT_SUSPENDED'
-    : 'MERCHANT_REJECTED'
+    const auditEvent = action === 'approve'
+      ? 'MERCHANT_APPROVED'
+      : action === 'suspend'
+      ? 'MERCHANT_SUSPENDED'
+      : 'MERCHANT_REJECTED'
 
-  await writeAuditLog({
-    event: auditEvent as AuditEvent,
-    entityType: 'merchant', entityId: merchantId,
-    detail: { action: newStatus, notes: notes ?? null },
-    ip: req.ip,
-  })
+    await writeAuditLog({
+      event: auditEvent as AuditEvent,
+      entityType: 'merchant', entityId: merchantId,
+      detail: { action: newStatus, notes: notes ?? null },
+      ip: req.ip,
+    })
 
-  logger.info('Merchant approval decision', { merchantId, action: newStatus })
-  res.json({ ok: true, merchantId, status: newStatus })
+    logger.info('Merchant approval decision', { merchantId, action: newStatus })
+    res.json({ ok: true, merchantId, status: newStatus })
+  } catch (err: unknown) {
+    logger.error('Failed to update merchant approval', { error: (err as Error).message, merchantId })
+    res.status(500).json({ error: 'Failed to update merchant' })
+  }
 })
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -784,9 +797,9 @@ router.post('/admin/approve/:merchantId', requireAdminSecret, async (req: Reques
 const MERCHANT_ACCESS_TTL_S  = 8  * 60 * 60   // 8 h
 const CONSUMER_ACCESS_TTL_S  = 24 * 60 * 60   // 24 h
 
-function issueMerchantAccessToken(merchantId: string, name: string, deviceId: string): string {
+function issueMerchantAccessToken(merchantId: string, name: string, deviceId: string, approvalStatus: string): string {
   return jwt.sign(
-    { sub: merchantId, name, role: 'MERCHANT', deviceId },
+    { sub: merchantId, name, role: 'MERCHANT', deviceId, approvalStatus },
     process.env.JWT_SECRET!,
     { expiresIn: MERCHANT_ACCESS_TTL_S }
   )

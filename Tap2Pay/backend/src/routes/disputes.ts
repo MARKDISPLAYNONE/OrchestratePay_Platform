@@ -13,8 +13,7 @@
  * One active dispute per transaction — a 409 is returned if an OPEN or
  * UNDER_REVIEW dispute already exists for the same transaction_id.
  *
- * Admin actions live at PATCH /api/v1/admin/disputes/:id — this router is
- * mounted at both /api/v1/disputes and /api/v1/admin in index.ts.
+ * Admin actions live at PATCH /api/v1/admin/disputes/:id via adminDisputeRouter.
  */
 import { Router, Request, Response, NextFunction } from 'express'
 import Joi from 'joi'
@@ -22,6 +21,7 @@ import jwt from 'jsonwebtoken'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db/index'
 import { requireRole, MerchantPayload, ConsumerPayload } from '../middleware/auth'
+import { requireAdmin } from './admin'
 import { validate } from '../middleware/validate'
 import { logger } from '../util/logger'
 
@@ -282,9 +282,9 @@ router.get('/:id', requireMerchantOrConsumer, async (req: Request, res: Response
 })
 
 // ─── PATCH /api/v1/admin/disputes/:id ─────────────────────────────────────────
-// Admin resolves or updates a dispute's status.
-// This router is also mounted at /api/v1/admin in index.ts, so the full
-// path becomes PATCH /api/v1/admin/disputes/:id.
+// ─── Admin: PATCH /api/v1/admin/disputes/:id ──────────────────────────────────
+// Separate router mounted at /api/v1/admin/disputes in index.ts.
+// Uses X-Admin-Secret auth, not a JWT role claim (no ADMIN JWT issuer exists).
 
 const RESOLVED_STATUSES = new Set([
   'RESOLVED_MERCHANT_FAVOR',
@@ -292,18 +292,21 @@ const RESOLVED_STATUSES = new Set([
   'CLOSED',
 ])
 
-router.patch(
-  '/disputes/:id',
-  requireRole('ADMIN'),
+export const adminDisputeRouter = Router()
+
+adminDisputeRouter.patch(
+  '/:id',
+  requireAdmin,
   validate(adminUpdateSchema),
   async (req: Request, res: Response) => {
     const { id } = req.params
     const { status, resolutionNotes } = req.body
 
-    // requireRole('ADMIN') attaches nothing to req.merchant/req.consumer.
-    // We decode the admin sub directly from the token.
-    const header  = req.headers.authorization!
-    const payload = jwt.decode(header.slice(7)) as { sub?: string } | null
+    // requireAdmin uses X-Admin-Secret, not JWT, so there may be no Authorization header.
+    const authHeader = req.headers.authorization
+    const payload = authHeader?.startsWith('Bearer ')
+      ? (jwt.decode(authHeader.slice(7)) as { sub?: string } | null)
+      : null
     const adminSub = payload?.sub ?? null
 
     const isResolution = RESOLVED_STATUSES.has(status)

@@ -16,9 +16,10 @@ const mockRequireAuth = jest.fn()
 const mockRequireConsumerAuth = jest.fn()
 
 jest.mock('../middleware/auth', () => ({
-  requireAuth:         (...args: any[]) => mockRequireAuth(...args),
-  requireConsumerAuth: (...args: any[]) => mockRequireConsumerAuth(...args),
-  DEVICE_CACHE_TTL_S:  9 * 60 * 60,
+  requireAuth:             (...args: any[]) => mockRequireAuth(...args),
+  requireConsumerAuth:     (...args: any[]) => mockRequireConsumerAuth(...args),
+  requireApprovedMerchant: (_req: any, _res: any, next: any) => next(),
+  DEVICE_CACHE_TTL_S:      9 * 60 * 60,
   requireRole: jest.fn().mockImplementation(() => (_req: any, _res: any, next: any) => next()),
 }))
 
@@ -1206,8 +1207,6 @@ describe('routes/loyalty.ts — additional branch coverage', () => {
     const mockClientQuery   = jest.fn()
     const mockClientRelease = jest.fn()
 
-    mockQuery.mockResolvedValueOnce({ rows: [{ points_balance: 0, stamps_balance: 20 }] })
-
     const { db } = require('../db/index')
     db.connect.mockResolvedValueOnce({
       query:   mockClientQuery,
@@ -1216,6 +1215,7 @@ describe('routes/loyalty.ts — additional branch coverage', () => {
 
     mockClientQuery
       .mockResolvedValueOnce({ rows: [] })  // BEGIN
+      .mockResolvedValueOnce({ rows: [{ points_balance: 0, stamps_balance: 20 }] })  // SELECT ... FOR UPDATE
       .mockResolvedValueOnce({ rows: [] })  // UPDATE loyalty_balances
       .mockResolvedValueOnce({ rows: [] })  // INSERT loyalty_ledger (stamps branch)
       .mockResolvedValueOnce({ rows: [] })  // COMMIT

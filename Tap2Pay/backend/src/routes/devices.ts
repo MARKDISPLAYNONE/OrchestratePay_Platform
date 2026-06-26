@@ -7,21 +7,13 @@
  *                    GET  /api/v1/admin/fleet/alerts
  *                    POST /api/v1/admin/fleet/:deviceId/config
  */
-import { Router, Request, Response, NextFunction } from 'express'
+import { Router, Request, Response } from 'express'
 import { db } from '../db/index'
 import { requireAuth } from '../middleware/auth'
+import { requireAdmin } from './admin'
 import { logger } from '../util/logger'
 import { sendSms, SmsTemplate } from '../integrations/africas-talking'
 import { writeAuditLog } from '../util/audit'
-
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const secret = req.headers['x-admin-secret']
-  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
-    logger.warn('Unauthorised admin fleet access', { ip: req.ip, path: req.path })
-    return res.status(403).json({ error: 'Admin access required' })
-  }
-  next()
-}
 
 const router = Router()
 

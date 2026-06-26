@@ -27,8 +27,12 @@ const router = Router()
 
 // ─── Admin guard ──────────────────────────────────────────────────────────────
 
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const secret = req.headers['x-admin-secret']
+  const hasAnyAuth = secret !== undefined || req.headers.authorization !== undefined
+  if (!hasAnyAuth) {
+    return res.status(401).json({ error: 'Authentication required' })
+  }
   if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
     logger.warn('Unauthorised admin endpoint access', { ip: req.ip, path: req.path })
     return res.status(403).json({ error: 'Admin access required' })

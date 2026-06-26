@@ -11,8 +11,9 @@
 import request from 'supertest'
 import express from 'express'
 
-process.env.JWT_SECRET = 'test-secret'
-process.env.NODE_ENV   = 'test'
+process.env.JWT_SECRET    = 'test-secret'
+process.env.ADMIN_SECRET  = 'test-admin-secret'
+process.env.NODE_ENV      = 'test'
 
 // ── Mock requireAuth (bypass real JWT + device binding) ───────────────────────
 const mockRequireAuth = jest.fn()
@@ -56,6 +57,7 @@ function buildApp() {
 function buildAdminApp() {
   const app = express()
   app.use(express.json())
+  app.use((_req, _res, next) => { _req.headers['x-admin-secret'] = process.env.ADMIN_SECRET!; next() })
   app.use('/api/v1/admin/settlements', adminSettlementRouter)
   return app
 }
@@ -352,7 +354,6 @@ describe('adminSettlementRouter GET /', () => {
     mockQuery.mockResolvedValueOnce({ rows: [row] })
 
     const res = await request(buildAdminApp()).get('/api/v1/admin/settlements')
-
     expect(res.status).toBe(200)
     expect(res.body).toHaveLength(1)
     expect(res.body[0].merchant_name).toBe('Test Merchant')
@@ -362,7 +363,6 @@ describe('adminSettlementRouter GET /', () => {
     mockQuery.mockResolvedValueOnce({ rows: [] })
 
     const res = await request(buildAdminApp()).get('/api/v1/admin/settlements?status=PENDING')
-
     expect(res.status).toBe(200)
     // Verify the status param was passed to the query
     const queryCall = mockQuery.mock.calls[0]
@@ -373,7 +373,6 @@ describe('adminSettlementRouter GET /', () => {
     mockQuery.mockResolvedValueOnce({ rows: [] })
 
     await request(buildAdminApp()).get('/api/v1/admin/settlements')
-
     const queryCall = mockQuery.mock.calls[0]
     expect(queryCall[1][1]).toBe(50)   // limit
     expect(queryCall[1][2]).toBe(0)    // offset
@@ -383,7 +382,6 @@ describe('adminSettlementRouter GET /', () => {
     mockQuery.mockResolvedValueOnce({ rows: [] })
 
     await request(buildAdminApp()).get('/api/v1/admin/settlements?limit=10&offset=20')
-
     const queryCall = mockQuery.mock.calls[0]
     expect(queryCall[1][1]).toBe(10)
     expect(queryCall[1][2]).toBe(20)
@@ -393,7 +391,6 @@ describe('adminSettlementRouter GET /', () => {
     mockQuery.mockResolvedValueOnce({ rows: [] })
 
     await request(buildAdminApp()).get('/api/v1/admin/settlements?limit=500')
-
     const queryCall = mockQuery.mock.calls[0]
     expect(queryCall[1][1]).toBe(200)
   })
@@ -402,7 +399,6 @@ describe('adminSettlementRouter GET /', () => {
     mockQuery.mockRejectedValueOnce(new Error('DB error'))
 
     const res = await request(buildAdminApp()).get('/api/v1/admin/settlements')
-
     expect(res.status).toBe(500)
     expect(res.body.error).toContain('Failed to fetch settlements')
   })

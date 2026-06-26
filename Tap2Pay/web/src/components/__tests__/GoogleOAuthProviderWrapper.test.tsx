@@ -8,9 +8,9 @@ jest.mock('@react-oauth/google', () => ({
 }))
 
 describe('GoogleOAuthProviderWrapper', () => {
-  it('renders children directly when NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set', () => {
-    const saved = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    delete process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+  it('renders children directly when VITE_GOOGLE_CLIENT_ID is not set', () => {
+    const saved = process.env.VITE_GOOGLE_CLIENT_ID
+    delete process.env.VITE_GOOGLE_CLIENT_ID
     try {
       render(
         <GoogleOAuthProviderWrapper>
@@ -20,13 +20,13 @@ describe('GoogleOAuthProviderWrapper', () => {
       expect(screen.getByText('test child')).toBeInTheDocument()
       expect(screen.queryByTestId('google-provider')).not.toBeInTheDocument()
     } finally {
-      if (saved !== undefined) process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = saved
+      if (saved !== undefined) process.env.VITE_GOOGLE_CLIENT_ID = saved
     }
   })
 
   it('wraps children in GoogleOAuthProvider when client ID is set', () => {
-    const saved = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = 'test-client-id'
+    const saved = process.env.VITE_GOOGLE_CLIENT_ID
+    process.env.VITE_GOOGLE_CLIENT_ID = 'test-client-id'
     try {
       render(
         <GoogleOAuthProviderWrapper>
@@ -36,8 +36,8 @@ describe('GoogleOAuthProviderWrapper', () => {
       expect(screen.getByText('test child')).toBeInTheDocument()
       expect(screen.getByTestId('google-provider')).toHaveAttribute('data-client-id', 'test-client-id')
     } finally {
-      if (saved !== undefined) process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = saved
-      else delete process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+      if (saved !== undefined) process.env.VITE_GOOGLE_CLIENT_ID = saved
+      else delete process.env.VITE_GOOGLE_CLIENT_ID
     }
   })
 })

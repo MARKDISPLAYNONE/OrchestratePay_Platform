@@ -58,8 +58,8 @@ import splitPaymentsRouter          from './routes/split-payments'
 import paymentRailsRouter           from './routes/payment-rails'
 import webhooksRouter               from './routes/webhooks'
 import apiKeysRouter                from './routes/api-keys'
-import disputesRouter               from './routes/disputes'
-import refundsRouter                from './routes/refunds'
+import disputesRouter, { adminDisputeRouter } from './routes/disputes'
+import refundsRouter,  { adminRefundRouter }  from './routes/refunds'
 import subscriptionsRouter          from './routes/subscriptions'
 import settlementRouter, { adminSettlementRouter } from './routes/settlement'
 import kycRouter, { adminKycRouter } from './routes/kyc'
@@ -234,6 +234,8 @@ app.use('/api/v1/settlements',    merchantRateLimit({ max: 60, windowMs: 60_000 
 app.use('/api/v1/kyc',            merchantRateLimit({ max: 30, windowMs: 60_000 }), kycRouter)
 app.use('/api/v1/admin/settlements', adminSettlementRouter)
 app.use('/api/v1/admin/kyc',         adminKycRouter)
+app.use('/api/v1/admin/disputes',    adminDisputeRouter)
+app.use('/api/v1/admin/refunds',     adminRefundRouter)
 // requireSafaricomIp blocks non-Safaricom IPs in production (bypass in dev/test)
 app.use('/api/v1/mpesa-callback', requireSafaricomIp, mpesaCallbackRouter)
 

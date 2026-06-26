@@ -11,17 +11,11 @@
  * by the hourly cron in index.ts. These endpoints exist for the web dashboard
  * to display current FX context and for ops to force an out-of-cycle refresh.
  */
-import { Router, Request, Response, NextFunction } from 'express'
+import { Router, Request, Response } from 'express'
 import { getAllRates, refreshAllRates, SUPPORTED_CURRENCIES } from '../util/fx'
+import { requireAdmin } from './admin'
 import { logger } from '../util/logger'
 import { writeAuditLog } from '../util/audit'
-
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!process.env.ADMIN_SECRET || req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET) {
-    return res.status(403).json({ error: 'Admin access required' })
-  }
-  next()
-}
 
 const router = Router()
 

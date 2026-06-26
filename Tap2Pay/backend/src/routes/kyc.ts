@@ -15,6 +15,7 @@ import Joi from 'joi'
 import { db } from '../db/index'
 import { logger } from '../util/logger'
 import { requireAuth } from '../middleware/auth'
+import { requireAdmin } from './admin'
 import { validate } from '../middleware/validate'
 import { writeAuditLog } from '../util/audit'
 import { sendSms } from '../integrations/africas-talking'
@@ -128,11 +129,19 @@ router.put('/business-details', requireAuth, validate(businessDetailsSchema), as
     )
     if (!updated) return res.status(404).json({ error: 'Merchant not found' })
 
-    // Re-run AML screening whenever profile changes (fire-and-forget)
+    // Re-run AML screening; capped at 8 s so a slow external call can't stall the response.
     const { runFullScreening } = await import('../util/aml-screening')
-    runFullScreening(merchantId).catch(err =>
+    try {
+      await Promise.race([
+        runFullScreening(merchantId),
+        new Promise<never>((_, reject) => {
+          const t = setTimeout(() => reject(new Error('AML screening timed out')), 8_000)
+          t.unref()
+        }),
+      ])
+    } catch (err) {
       logger.warn('AML re-screening failed after profile update', { merchantId, error: (err as Error).message })
-    )
+    }
 
     await writeAuditLog({
       event: 'KYC_BUSINESS_DETAILS_UPDATED' as never,
@@ -208,6 +217,8 @@ router.post('/documents', requireAuth, validate(documentSchema), async (req: Req
 // ─── Admin KYC router ─────────────────────────────────────────────────────────
 
 export const adminKycRouter = Router()
+
+adminKycRouter.use(requireAdmin)
 
 const adminReviewSchema = Joi.object({
   action: Joi.string().valid('APPROVE', 'REJECT', 'UNDER_REVIEW').required(),
@@ -287,7 +298,7 @@ adminKycRouter.patch('/:id', validate(adminReviewSchema), async (req: Request, r
     if (rows.length === 0) return res.status(404).json({ error: 'Merchant not found' })
 
     await writeAuditLog({
-      event: action === 'APPROVE' ? 'KYC_APPROVED' : 'KYC_REJECTED',
+      event: action === 'APPROVE' ? 'KYC_APPROVED' : action === 'UNDER_REVIEW' ? 'KYC_UNDER_REVIEW' : 'KYC_REJECTED',
       entityType: 'merchant', entityId: id,
       detail: { action, notes }, ip: req.ip,
     })

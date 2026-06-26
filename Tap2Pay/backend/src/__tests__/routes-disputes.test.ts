@@ -6,8 +6,9 @@
  * device-binding check), so no Redis mock is needed for these tests.
  */
 
-process.env.NODE_ENV   = 'test'
-process.env.JWT_SECRET = 'test-secret'
+process.env.NODE_ENV    = 'test'
+process.env.JWT_SECRET  = 'test-secret'
+process.env.ADMIN_SECRET = 'test-admin-secret'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,7 @@ jest.mock('../util/logger', () => ({
 import request from 'supertest'
 import express from 'express'
 import jwt from 'jsonwebtoken'
-import disputesRouter from '../routes/disputes'
+import disputesRouter, { adminDisputeRouter } from '../routes/disputes'
 
 // ── App factory ────────────────────────────────────────────────────────────────
 
@@ -31,9 +32,19 @@ function buildApp() {
   const app = express()
   app.use(express.json())
   app.use('/api/v1/disputes', disputesRouter)
-  // Admin routes live at /api/v1/admin — the router's PATCH handler is at
-  // /disputes/:id relative to that mount point.
-  app.use('/api/v1/admin', disputesRouter)
+  return app
+}
+
+// injectSecret=true: injects X-Admin-Secret header so admin routes pass auth
+// injectSecret=false: mounts adminDisputeRouter without injecting the secret (for auth failure tests)
+function buildAdminApp(injectSecret = false) {
+  const app = express()
+  app.use(express.json())
+  app.use('/api/v1/disputes', disputesRouter)
+  if (injectSecret) {
+    app.use((_req, _res, next) => { _req.headers['x-admin-secret'] = process.env.ADMIN_SECRET!; next() })
+  }
+  app.use('/api/v1/admin/disputes', adminDisputeRouter)
   return app
 }
 
@@ -458,9 +469,8 @@ describe('PATCH /api/v1/admin/disputes/:id', () => {
       .mockResolvedValueOnce({ rows: [{ id: DISPUTE_ID }] })  // existence check
       .mockResolvedValueOnce({ rows: [{ ...DISPUTE_ROW, status: 'UNDER_REVIEW' }] })  // UPDATE
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/disputes/${DISPUTE_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ status: 'UNDER_REVIEW' })
 
     expect(res.status).toBe(200)
@@ -479,9 +489,8 @@ describe('PATCH /api/v1/admin/disputes/:id', () => {
         }],
       })
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/disputes/${DISPUTE_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ status: 'RESOLVED_MERCHANT_FAVOR', resolutionNotes: 'Merchant provided valid receipt.' })
 
     expect(res.status).toBe(200)
@@ -496,9 +505,8 @@ describe('PATCH /api/v1/admin/disputes/:id', () => {
         rows: [{ ...DISPUTE_ROW, status: 'RESOLVED_CONSUMER_FAVOR', resolved_at: new Date().toISOString() }],
       })
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/disputes/${DISPUTE_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ status: 'RESOLVED_CONSUMER_FAVOR', resolutionNotes: 'Duplicate confirmed.' })
 
     expect(res.status).toBe(200)
@@ -510,9 +518,8 @@ describe('PATCH /api/v1/admin/disputes/:id', () => {
       .mockResolvedValueOnce({ rows: [{ id: DISPUTE_ID }] })
       .mockResolvedValueOnce({ rows: [{ ...DISPUTE_ROW, status: 'CLOSED', resolved_at: new Date().toISOString() }] })
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/disputes/${DISPUTE_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ status: 'CLOSED' })
 
     expect(res.status).toBe(200)
@@ -522,9 +529,8 @@ describe('PATCH /api/v1/admin/disputes/:id', () => {
   it('returns 404 when dispute does not exist', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [] })
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/disputes/${DISPUTE_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ status: 'UNDER_REVIEW' })
 
     expect(res.status).toBe(404)
@@ -532,9 +538,8 @@ describe('PATCH /api/v1/admin/disputes/:id', () => {
   })
 
   it('returns 400 when status is invalid', async () => {
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/disputes/${DISPUTE_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ status: 'INVENTED_STATUS' })
 
     expect(res.status).toBe(400)
@@ -542,7 +547,7 @@ describe('PATCH /api/v1/admin/disputes/:id', () => {
   })
 
   it('returns 403 when called by a merchant (not admin)', async () => {
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(false))
       .patch(`/api/v1/admin/disputes/${DISPUTE_ID}`)
       .set('Authorization', `Bearer ${merchantToken()}`)
       .send({ status: 'UNDER_REVIEW' })
@@ -551,7 +556,7 @@ describe('PATCH /api/v1/admin/disputes/:id', () => {
   })
 
   it('returns 401 without auth', async () => {
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(false))
       .patch(`/api/v1/admin/disputes/${DISPUTE_ID}`)
       .send({ status: 'UNDER_REVIEW' })
 
@@ -563,9 +568,8 @@ describe('PATCH /api/v1/admin/disputes/:id', () => {
       .mockResolvedValueOnce({ rows: [{ id: DISPUTE_ID }] })
       .mockRejectedValueOnce(new Error('DB error'))
 
-    const res = await request(buildApp())
+    const res = await request(buildAdminApp(true))
       .patch(`/api/v1/admin/disputes/${DISPUTE_ID}`)
-      .set('Authorization', `Bearer ${adminToken()}`)
       .send({ status: 'UNDER_REVIEW' })
 
     expect(res.status).toBe(500)

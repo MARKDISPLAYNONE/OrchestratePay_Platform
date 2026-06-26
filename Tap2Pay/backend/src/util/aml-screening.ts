@@ -64,7 +64,7 @@ export async function runFullScreening(merchantId: string): Promise<ScreeningRes
     }
 
     // 3. High expected volume without KRA PIN → elevated risk
-    if (!m.kra_pin && m.expected_monthly_volume_cents > 100_000_00) {
+    if (!m.kra_pin && (m.expected_monthly_volume_cents ?? 0) > 100_000_000) {
       riskLevel = riskLevel === 'HIGH' ? 'HIGH' : 'MEDIUM'
       reasons.push('High expected volume without KRA PIN')
     }

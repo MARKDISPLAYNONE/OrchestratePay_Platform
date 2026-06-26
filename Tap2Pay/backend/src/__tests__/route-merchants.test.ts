@@ -65,14 +65,14 @@ beforeEach(() => {
 // ── POST /api/v1/merchants ────────────────────────────────────────────────────
 
 describe('POST /api/v1/merchants', () => {
-  it('returns 403 without admin secret', async () => {
+  it('returns 401 without admin secret', async () => {
     const app = buildApp()
     const res = await request(app)
       .post('/api/v1/merchants')
       .send({ name: 'Shop', email: 'a@b.com', password: 'Pass1234!', phone: '254700000001' })
 
-    expect(res.status).toBe(403)
-    expect(res.body.error).toMatch(/admin/i)
+    expect(res.status).toBe(401)
+    expect(res.body.error).toMatch(/admin|auth/i)
   })
 
   it('returns 403 with wrong admin secret', async () => {

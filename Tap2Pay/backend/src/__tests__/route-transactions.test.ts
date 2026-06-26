@@ -853,7 +853,7 @@ describe('POST /api/v1/transactions/merchant-hce-token', () => {
     const res = await request(app)
       .post('/api/v1/transactions/merchant-hce-token')
       .set('Authorization', `Bearer ${merchantToken()}`)
-      .send({ amountCents: 5000 })
+      .send({ amountCents: 5000, consumerId: CONSUMER_ID })
 
     expect(res.status).toBe(403)
     expect(res.body.error).toMatch(/not approved/i)
@@ -868,7 +868,7 @@ describe('POST /api/v1/transactions/merchant-hce-token', () => {
     const res = await request(app)
       .post('/api/v1/transactions/merchant-hce-token')
       .set('Authorization', `Bearer ${merchantToken()}`)
-      .send({ amountCents: 5000 })
+      .send({ amountCents: 5000, consumerId: CONSUMER_ID })
 
     expect(res.status).toBe(200)
     expect(res.body.token).toBeDefined()

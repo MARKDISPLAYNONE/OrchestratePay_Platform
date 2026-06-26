@@ -218,7 +218,7 @@ describe('consumer connection (consumerId)', () => {
   })
 
   it('subscribes to consumer:payment:{consumerId} channel', async () => {
-    const ws = await wsConnect({ consumerId: 'consumer-2', token: makeToken() })
+    const ws = await wsConnect({ consumerId: 'consumer-2', token: makeToken({ sub: 'consumer-2' }) })
     await tick()
     expect(lastSub.subscribe).toHaveBeenCalledWith(
       'consumer:payment:consumer-2',
@@ -229,7 +229,7 @@ describe('consumer connection (consumerId)', () => {
   })
 
   it('sets presence key consumer:ws:{consumerId} in Redis', async () => {
-    await wsConnect({ consumerId: 'consumer-3', token: makeToken() })
+    await wsConnect({ consumerId: 'consumer-3', token: makeToken({ sub: 'consumer-3' }) })
     await tick()
     expect(mockSetex).toHaveBeenCalledWith(
       'consumer:ws:consumer-3',
@@ -239,7 +239,7 @@ describe('consumer connection (consumerId)', () => {
   })
 
   it('forwards payment event to connected consumer client', async () => {
-    const ws      = await wsConnect({ consumerId: 'consumer-4', token: makeToken() })
+    const ws      = await wsConnect({ consumerId: 'consumer-4', token: makeToken({ sub: 'consumer-4' }) })
     const msgProm = nextMessage(ws)
     await tick()
 
@@ -253,7 +253,7 @@ describe('consumer connection (consumerId)', () => {
   })
 
   it('deletes presence key and cleans up on disconnect', async () => {
-    const ws = await wsConnect({ consumerId: 'consumer-5', token: makeToken() })
+    const ws = await wsConnect({ consumerId: 'consumer-5', token: makeToken({ sub: 'consumer-5' }) })
     await tick()
 
     ws.close()
@@ -264,7 +264,7 @@ describe('consumer connection (consumerId)', () => {
   })
 
   it('handles Redis subscriber error gracefully', async () => {
-    const ws = await wsConnect({ consumerId: 'consumer-err', token: makeToken() })
+    const ws = await wsConnect({ consumerId: 'consumer-err', token: makeToken({ sub: 'consumer-err' }) })
     await tick()
 
     const closeP = closeCode(ws)
@@ -299,7 +299,7 @@ describe('ping timer callbacks (fake timers)', () => {
 
   it('fires ping while consumer socket is OPEN and refreshes presence key', async () => {
     jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] })
-    const ws = await wsConnect({ consumerId: 'ping-consumer', token: makeToken() })
+    const ws = await wsConnect({ consumerId: 'ping-consumer', token: makeToken({ sub: 'ping-consumer' }) })
     await tick()
 
     jest.advanceTimersByTime(16_000)
@@ -342,7 +342,7 @@ describe('ping timer callbacks (fake timers)', () => {
 
   it('takes the clearInterval branch (line 155) when consumer socket is CLOSING during ping', async () => {
     jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] })
-    const ws = await wsConnect({ consumerId: 'ping-closing-consumer', token: makeToken() })
+    const ws = await wsConnect({ consumerId: 'ping-closing-consumer', token: makeToken({ sub: 'ping-closing-consumer' }) })
     await tick()
 
     lastSub.emit('error', new Error('Redis error forces close'))
@@ -381,7 +381,7 @@ describe('.catch() handler functions', () => {
   })
 
   it('consumer cleanup: redis.del rejection is swallowed', async () => {
-    const ws = await wsConnect({ consumerId: 'cleanup-del-consumer', token: makeToken() })
+    const ws = await wsConnect({ consumerId: 'cleanup-del-consumer', token: makeToken({ sub: 'cleanup-del-consumer' }) })
     await tick()
 
     mockDel.mockRejectedValueOnce(new Error('Redis del error'))
@@ -394,7 +394,7 @@ describe('.catch() handler functions', () => {
   it('consumer connect: initial redis.setex rejection is swallowed', async () => {
     mockSetex.mockRejectedValueOnce(new Error('Redis setex error'))
 
-    const ws = await wsConnect({ consumerId: 'setex-fail-consumer', token: makeToken() })
+    const ws = await wsConnect({ consumerId: 'setex-fail-consumer', token: makeToken({ sub: 'setex-fail-consumer' }) })
     await tick()
 
     ws.close()
@@ -433,7 +433,7 @@ describe('subscribe callback error branch', () => {
   it('line 140: closes consumer WS with 1011 when sub.subscribe callback fires with error', async () => {
     redis.duplicate.mockImplementationOnce(() => makeFailingSub())
 
-    const ws  = new WebSocket(`ws://127.0.0.1:${port}/ws?consumerId=sub-err-consumer&token=${makeToken()}`)
+    const ws  = new WebSocket(`ws://127.0.0.1:${port}/ws?consumerId=sub-err-consumer&token=${makeToken({ sub: 'sub-err-consumer' })}`)
     openSockets.push(ws)
     const code = await new Promise<number>(resolve => ws.on('close', resolve))
     expect(code).toBe(1011)
@@ -446,7 +446,7 @@ describe('subscribe callback error branch', () => {
 
 describe('consumer cleanup .catch() handlers', () => {
   it('line 162: consumer sub.unsubscribe rejection is swallowed on disconnect', async () => {
-    const ws = await wsConnect({ consumerId: 'cleanup-unsub-consumer', token: makeToken() })
+    const ws = await wsConnect({ consumerId: 'cleanup-unsub-consumer', token: makeToken({ sub: 'cleanup-unsub-consumer' }) })
     await tick()
 
     lastSub.unsubscribe.mockRejectedValueOnce(new Error('consumer unsubscribe error'))
@@ -457,7 +457,7 @@ describe('consumer cleanup .catch() handlers', () => {
   })
 
   it('line 163: consumer sub.quit rejection is swallowed on disconnect', async () => {
-    const ws = await wsConnect({ consumerId: 'cleanup-quit-consumer', token: makeToken() })
+    const ws = await wsConnect({ consumerId: 'cleanup-quit-consumer', token: makeToken({ sub: 'cleanup-quit-consumer' }) })
     await tick()
 
     lastSub.quit.mockRejectedValueOnce(new Error('consumer quit error'))
@@ -484,7 +484,7 @@ describe('consumer ping setex catch and ws socket error handlers', () => {
       .mockResolvedValueOnce('OK')
       .mockRejectedValueOnce(new Error('setex ping error'))
 
-    const ws = await wsConnect({ consumerId: 'ping-setex-reject', token: makeToken() })
+    const ws = await wsConnect({ consumerId: 'ping-setex-reject', token: makeToken({ sub: 'ping-setex-reject' }) })
     await tick()
 
     jest.advanceTimersByTime(16_000)  // trigger PING_INTERVAL_MS (15s)
@@ -509,7 +509,7 @@ describe('consumer ping setex catch and ws socket error handlers', () => {
   })
 
   it('line 167: consumer ws.on("error") handler fires on protocol violation (unmasked frame)', async () => {
-    const ws = await wsConnect({ consumerId: 'consumer-ws-err', token: makeToken() })
+    const ws = await wsConnect({ consumerId: 'consumer-ws-err', token: makeToken({ sub: 'consumer-ws-err' }) })
     await tick()
 
     ws.on('error', () => {})  // suppress unhandled client-side error event

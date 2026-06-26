@@ -420,7 +420,7 @@ describe('validate with merchantHceTokenSchema', () => {
   it('passes a valid amountCents', async () => {
     const res = await request(buildApp(merchantHceTokenSchema))
       .post('/test')
-      .send({ amountCents: 10000 })
+      .send({ amountCents: 10000, consumerId: 'b2b3b4b5-c2c3-4d4d-e5e5-f1f2f3f4f5f6' })
 
     expect(res.status).toBe(200)
     expect(res.body.body.amountCents).toBe(10000)

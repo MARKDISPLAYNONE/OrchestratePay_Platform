@@ -163,7 +163,7 @@ describe('POST /api/v1/auth/login', () => {
     expect(res.body.error).toMatch(/deactivated/i)
   })
 
-  it('allows PENDING_REVIEW merchants to log in so they can submit KYC docs', async () => {
+  it('allows PENDING_REVIEW merchants to log in (so they can submit KYC docs)', async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [{ ...MERCHANT_ROW, approval_status: 'PENDING_REVIEW' }] })
       .mockResolvedValueOnce({ rows: [] })   // UPDATE device_id
@@ -173,7 +173,7 @@ describe('POST /api/v1/auth/login', () => {
       .send(VALID_BODY)
     expect(res.status).toBe(200)
     expect(res.body.token).toBeDefined()
-    expect(res.body.role).toBe('MERCHANT')
+    expect(res.body.refreshToken).toBeDefined()
   })
 
   it('returns 403 when approval_status is REJECTED', async () => {
@@ -688,9 +688,9 @@ describe('POST /api/v1/auth/consumer/logout', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /api/v1/auth/admin/pending', () => {
-  it('returns 403 without admin secret', async () => {
+  it('returns 401 without admin secret', async () => {
     const res = await request(buildApp()).get('/api/v1/auth/admin/pending')
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(401)
   })
 
   it('returns list of PENDING_REVIEW merchants', async () => {

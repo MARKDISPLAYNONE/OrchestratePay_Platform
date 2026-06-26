@@ -606,6 +606,12 @@ describe('settlement', () => {
     expect(lastCallUrl()).toContain('/settlements?page=2&limit=10')
   })
 
+  it('list uses default page=1 and limit=20 when called with no args', async () => {
+    mockOk({ settlements: [], total: 0 })
+    await settlement.list()
+    expect(lastCallUrl()).toContain('/settlements?page=1&limit=20')
+  })
+
   it('get GETs /api/v1/settlements/:id', async () => {
     mockOk({ id: 's-1' })
     await settlement.get('s-1')
@@ -662,5 +668,63 @@ describe('kyc', () => {
     expect(lastCallUrl()).toContain('/kyc/business-details')
     expect(lastCallOpts().method).toBe('PUT')
     expect(lastCallBody()).toMatchObject({ kraPin: 'A001234567B' })
+  })
+})
+
+// ─── admin namespace ──────────────────────────────────────────────────────────
+
+describe('admin.getAllMerchants', () => {
+  it('GETs /api/v1/admin/merchants', async () => {
+    mockOk([{ id: 'merch-1', name: 'Baridi Café' }])
+    const r = await admin.getAllMerchants()
+    expect(lastCallUrl()).toContain('/api/v1/admin/merchants')
+    expect(lastCallOpts().method).toBe('GET')
+    expect(r).toHaveLength(1)
+  })
+})
+
+describe('admin.getConsumers', () => {
+  it('GETs /api/v1/admin/consumers', async () => {
+    mockOk([{ id: 'con-1', email: 'alice@example.com' }])
+    const r = await admin.getConsumers()
+    expect(lastCallUrl()).toContain('/api/v1/admin/consumers')
+    expect(lastCallOpts().method).toBe('GET')
+    expect(r).toHaveLength(1)
+  })
+})
+
+describe('admin.amlFlags', () => {
+  it('GETs /api/v1/admin/aml/flags without status filter', async () => {
+    mockOk([])
+    await admin.amlFlags()
+    expect(lastCallUrl()).toContain('/api/v1/admin/aml/flags')
+    expect(lastCallUrl()).not.toContain('status=')
+  })
+
+  it('GETs /api/v1/admin/aml/flags with status filter', async () => {
+    mockOk([])
+    await admin.amlFlags('OPEN')
+    expect(lastCallUrl()).toContain('status=OPEN')
+  })
+})
+
+describe('admin.updateAmlFlag', () => {
+  it('PATCHes /api/v1/admin/aml/flags/:id', async () => {
+    mockOk({ id: 'flag-1', status: 'RESOLVED' })
+    const r = await admin.updateAmlFlag('flag-1', { status: 'RESOLVED', notes: 'Cleared' })
+    expect(lastCallUrl()).toContain('/api/v1/admin/aml/flags/flag-1')
+    expect(lastCallOpts().method).toBe('PATCH')
+    expect(lastCallBody()).toMatchObject({ status: 'RESOLVED', notes: 'Cleared' })
+    expect(r.status).toBe('RESOLVED')
+  })
+})
+
+describe('admin.screenMerchant', () => {
+  it('POSTs to /api/v1/admin/kyc/:merchantId/screen', async () => {
+    mockOk({ status: 'CLEAR', matches: [], riskLevel: 'LOW', reasons: [] })
+    const r = await admin.screenMerchant('merch-abc')
+    expect(lastCallUrl()).toContain('/api/v1/admin/kyc/merch-abc/screen')
+    expect(lastCallOpts().method).toBe('POST')
+    expect(r.riskLevel).toBe('LOW')
   })
 })

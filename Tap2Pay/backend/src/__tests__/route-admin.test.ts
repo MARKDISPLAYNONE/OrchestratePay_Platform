@@ -55,10 +55,10 @@ beforeEach(() => {
 // ── GET /api/v1/admin/stats ───────────────────────────────────────────────────
 
 describe('GET /api/v1/admin/stats', () => {
-  it('returns 403 without admin secret', async () => {
+  it('returns 401 without admin secret', async () => {
     const res = await request(buildApp()).get('/api/v1/admin/stats')
-    expect(res.status).toBe(403)
-    expect(res.body.error).toMatch(/admin/i)
+    expect(res.status).toBe(401)
+    expect(res.body.error).toMatch(/admin|auth/i)
   })
 
   it('returns 403 with wrong admin secret', async () => {
@@ -158,9 +158,9 @@ describe('GET /api/v1/admin/stats', () => {
 // ── GET /api/v1/admin/pending ─────────────────────────────────────────────────
 
 describe('GET /api/v1/admin/pending', () => {
-  it('returns 403 without admin secret', async () => {
+  it('returns 401 without admin secret', async () => {
     const res = await request(buildApp()).get('/api/v1/admin/pending')
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(401)
   })
 
   it('returns pending transactions list', async () => {
@@ -208,9 +208,9 @@ describe('GET /api/v1/admin/pending', () => {
 // ── GET /api/v1/admin/circuit ─────────────────────────────────────────────────
 
 describe('GET /api/v1/admin/circuit', () => {
-  it('returns 403 without admin secret', async () => {
+  it('returns 401 without admin secret', async () => {
     const res = await request(buildApp()).get('/api/v1/admin/circuit')
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(401)
   })
 
   it('returns circuit breaker status', async () => {
