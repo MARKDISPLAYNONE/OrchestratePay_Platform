@@ -16,7 +16,9 @@ data class LoyaltyState(
     val redemptionSuccess: String? = null
 )
 
-class LoyaltyViewModel : ViewModel() {
+class LoyaltyViewModel(
+    private val apiClient: ConsumerApiClientInstance = ConsumerApiClient
+) : ViewModel() {
 
     private val _state = MutableStateFlow(LoyaltyState())
     val state: StateFlow<LoyaltyState> = _state.asStateFlow()
@@ -24,7 +26,7 @@ class LoyaltyViewModel : ViewModel() {
     fun loadLoyalty() {
         _state.value = _state.value.copy(isLoading = true, error = null)
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.getLoyalty() }
+            runCatching { apiClient.getLoyalty() }
                 .onSuccess { resp ->
                     _state.value = _state.value.copy(balances = resp.balances, isLoading = false)
                 }
@@ -36,7 +38,7 @@ class LoyaltyViewModel : ViewModel() {
 
     fun redeem(merchantId: String, rewardId: String) {
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.redeemLoyalty(merchantId, rewardId) }
+            runCatching { apiClient.redeemLoyalty(merchantId, rewardId) }
                 .onSuccess {
                     _state.value = _state.value.copy(redemptionSuccess = "Reward redeemed successfully!")
                     loadLoyalty() // Refresh

@@ -18,7 +18,9 @@ sealed class RegisterState {
     data class Error(val message: String) : RegisterState()
 }
 
-class RegisterViewModel : ViewModel() {
+class RegisterViewModel(
+    private val apiClient: ConsumerApiClientInstance = ConsumerApiClient
+) : ViewModel() {
 
     private val _state = MutableStateFlow<RegisterState>(RegisterState.Idle)
     val state: StateFlow<RegisterState> = _state.asStateFlow()
@@ -36,7 +38,7 @@ class RegisterViewModel : ViewModel() {
         _state.value = RegisterState.Loading
 
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.register(email, password, phone) }
+            runCatching { apiClient.register(email, password, phone) }
                 .onSuccess { auth ->
                     ConsumerSessionManager.saveSession(
                         token = auth.token,
@@ -46,7 +48,7 @@ class RegisterViewModel : ViewModel() {
                         expiresAt = auth.expiresAt
                     )
                     ConsumerSessionManager.getFcmToken()?.let { fcm ->
-                        runCatching { ConsumerApiClient.updateFcmToken(fcm) }
+                        runCatching { apiClient.updateFcmToken(fcm) }
                     }
                     ConsumerWebSocketClient.shared?.connect()
                     _state.value = RegisterState.Success(auth)

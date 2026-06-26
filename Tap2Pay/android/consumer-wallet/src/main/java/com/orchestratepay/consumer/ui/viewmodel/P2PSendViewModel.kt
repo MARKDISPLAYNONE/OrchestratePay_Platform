@@ -17,7 +17,9 @@ sealed class P2pPayState {
     data class Error(val message: String) : P2pPayState()
 }
 
-class P2PSendViewModel : ViewModel() {
+class P2PSendViewModel(
+    private val apiClient: ConsumerApiClientInstance = ConsumerApiClient
+) : ViewModel() {
 
     private val _state = MutableStateFlow<P2pPayState>(P2pPayState.Idle)
     val state: StateFlow<P2pPayState> = _state.asStateFlow()
@@ -30,10 +32,10 @@ class P2PSendViewModel : ViewModel() {
     ) {
         _state.value = P2pPayState.Processing
         val idempotencyKey = buildIdempotencyKey()
-        
+
         viewModelScope.launch {
             runCatching {
-                ConsumerApiClient.p2pPay(
+                apiClient.p2pPay(
                     p2pToken = p2pToken,
                     payeeConsumerId = payeeConsumerId,
                     amountCents = amountCents,

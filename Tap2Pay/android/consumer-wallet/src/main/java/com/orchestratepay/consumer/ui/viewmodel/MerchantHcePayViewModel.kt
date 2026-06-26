@@ -20,7 +20,9 @@ sealed class HcePaymentState {
     data class Error(val message: String, val canRetry: Boolean = true) : HcePaymentState()
 }
 
-class MerchantHcePayViewModel : ViewModel() {
+class MerchantHcePayViewModel(
+    private val apiClient: ConsumerApiClientInstance = ConsumerApiClient
+) : ViewModel() {
 
     private val _state = MutableStateFlow<HcePaymentState>(HcePaymentState.Idle)
     val state: StateFlow<HcePaymentState> = _state.asStateFlow()
@@ -33,7 +35,7 @@ class MerchantHcePayViewModel : ViewModel() {
 
         viewModelScope.launch {
             runCatching {
-                ConsumerApiClient.payMerchantViaHce(
+                apiClient.payMerchantViaHce(
                     merchantId = merchantId,
                     amountCents = amountCents,
                     idempotencyKey = idempotencyKey,
@@ -55,7 +57,7 @@ class MerchantHcePayViewModel : ViewModel() {
             while (secondsRemaining > 0) {
                 _state.value = HcePaymentState.WaitingForMpesa(txnId, secondsRemaining)
                 
-                runCatching { ConsumerApiClient.getTransactionStatus(txnId) }
+                runCatching { apiClient.getTransactionStatus(txnId) }
                     .onSuccess { status ->
                         when (status.status) {
                             "CONFIRMED" -> {

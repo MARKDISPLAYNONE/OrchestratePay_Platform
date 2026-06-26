@@ -1,8 +1,11 @@
 package com.orchestratepay.softpos.ui
 
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.os.Bundle
-import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
+import com.orchestratepay.softpos.databinding.ActivityTapGuideBinding
 
 /**
  * TapGuideActivity — guides the merchant to hold the customer's phone in the
@@ -14,17 +17,14 @@ import androidx.appcompat.app.AppCompatActivity
  *
  * The antenna position is derived from the device's Build.MODEL and a lookup table.
  * For unknown models we default to "center of back" (most common location).
- *
- * This activity is launched from SoftPosDashboardActivity when the merchant
- * presses "Ready to accept payment" — it replaces the NFC idle screen.
  */
 class TapGuideActivity : AppCompatActivity() {
 
+    private lateinit var binding: ActivityTapGuideBinding
+
     companion object {
-        /** Intent extra: amount in cents to display in the guide screen. */
         const val EXTRA_AMOUNT_CENTS = "amount_cents"
 
-        // Common antenna locations by device family
         private val ANTENNA_POSITION = mapOf(
             "pixel"   to AntennaPosition.CENTER,
             "samsung" to AntennaPosition.TOP,
@@ -47,27 +47,66 @@ class TapGuideActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // setContentView(R.layout.activity_tap_guide)
+        binding = ActivityTapGuideBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
         val amountCents = intent.getLongExtra(EXTRA_AMOUNT_CENTS, 0L)
         val position    = antennaPosition()
 
-        // Show amount + "Hold customer's phone here" instruction
-        // Animate a pulsing ring at the antenna position
         setupGuide(amountCents, position)
+
+        binding.btnCancel.setOnClickListener { finish() }
     }
 
     private fun setupGuide(amountCents: Long, position: AntennaPosition) {
+        binding.tvAmount.text = "KSh ${"%.2f".format(amountCents / 100.0)}"
+
+        // Translate the ring container to the correct third of the screen.
+        // ConstraintLayout centers it by default (CENTER = no offset).
+        val screenHeight = resources.displayMetrics.heightPixels.toFloat()
+        binding.ringContainer.translationY = when (position) {
+            AntennaPosition.TOP    -> -screenHeight * 0.25f
+            AntennaPosition.CENTER -> 0f
+            AntennaPosition.BOTTOM ->  screenHeight * 0.25f
+        }
+
+        startPulseAnimation()
+
         android.util.Log.d("TapGuide",
-            "Showing tap guide: KSh ${amountCents / 100}, antenna position = $position")
-        // TODO: show pulsing ring animation at correct screen position
-        //   TOP    → ring in top third of screen
-        //   CENTER → ring in middle of screen
-        //   BOTTOM → ring in bottom third of screen
+            "Tap guide: KSh ${amountCents / 100}, antenna=$position")
+    }
+
+    private fun startPulseAnimation() {
+        val outerSet = AnimatorSet().apply {
+            playTogether(
+                ObjectAnimator.ofFloat(binding.ringOuter, "scaleX", 1f, 1.4f),
+                ObjectAnimator.ofFloat(binding.ringOuter, "scaleY", 1f, 1.4f),
+                ObjectAnimator.ofFloat(binding.ringOuter, "alpha",  0.5f, 0f),
+            )
+            duration     = 1200
+            repeatCount  = ObjectAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+        }
+
+        val innerSet = AnimatorSet().apply {
+            playTogether(
+                ObjectAnimator.ofFloat(binding.ringInner, "scaleX", 1f, 1.2f, 1f),
+                ObjectAnimator.ofFloat(binding.ringInner, "scaleY", 1f, 1.2f, 1f),
+                ObjectAnimator.ofFloat(binding.ringInner, "alpha",  0.7f, 0.3f, 0.7f),
+            )
+            duration     = 1200
+            startDelay   = 300
+            repeatCount  = ObjectAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+        }
+
+        AnimatorSet().apply {
+            playTogether(outerSet, innerSet)
+            start()
+        }
     }
 
     override fun onBackPressed() {
-        // Don't allow back during active payment — let the merchant cancel via button
         @Suppress("DEPRECATION")
         super.onBackPressed()
     }

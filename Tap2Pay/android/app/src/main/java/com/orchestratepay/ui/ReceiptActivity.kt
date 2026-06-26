@@ -59,7 +59,12 @@ class ReceiptActivity : AppCompatActivity() {
 
     private fun displayReceipt(record: ReceiptRecord, isFirstPrint: Boolean) {
         val amountDisplay = "KSh ${"%.2f".format(record.amountCents / 100.0)}"
-        val dateDisplay   = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date())
+        val dateDisplay   = try {
+            val instant = Instant.parse(record.confirmedAtIso)
+            SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date.from(instant))
+        } catch (e: Exception) {
+            SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date())
+        }
 
         binding.tvMerchantName.text = record.merchantName
         binding.tvAmount.text       = amountDisplay
@@ -78,34 +83,25 @@ class ReceiptActivity : AppCompatActivity() {
             getString(com.orchestratepay.R.string.btn_reprint_again)
 
         binding.btnReprint.setOnClickListener {
-            lifecycleScope.launch {
-                // Convert ReceiptRecord to PaymentResult.Success for the printer
-                val paymentResult = com.orchestratepay.payment.PaymentResult.Success(
-                    txnId         = record.txnId,
-                    mpesaRef      = record.mpesaRef,
-                    amountCents   = record.amountCents,
-                    merchantName  = record.merchantName,
-                    consumerPhone = record.consumerPhone
-                )
-                printer.printReceipt(paymentResult, record.kraPin)
-                ReceiptCache.markPrinted(record.txnId)
-            }
+            lifecycleScope.launch { doPrint(record) }
         }
 
         binding.btnDone.setOnClickListener { finish() }
 
         if (isFirstPrint) {
-            lifecycleScope.launch {
-                val paymentResult = com.orchestratepay.payment.PaymentResult.Success(
-                    txnId         = record.txnId,
-                    mpesaRef      = record.mpesaRef,
-                    amountCents   = record.amountCents,
-                    merchantName  = record.merchantName,
-                    consumerPhone = record.consumerPhone
-                )
-                printer.printReceipt(paymentResult, record.kraPin)
-                ReceiptCache.markPrinted(record.txnId)
-            }
+            lifecycleScope.launch { doPrint(record) }
         }
+    }
+
+    private suspend fun doPrint(record: ReceiptRecord) {
+        val paymentResult = com.orchestratepay.payment.PaymentResult.Success(
+            txnId         = record.txnId,
+            mpesaRef      = record.mpesaRef,
+            amountCents   = record.amountCents,
+            merchantName  = record.merchantName,
+            consumerPhone = record.consumerPhone
+        )
+        printer.printReceipt(paymentResult, record.kraPin)
+        ReceiptCache.markPrinted(record.txnId)
     }
 }

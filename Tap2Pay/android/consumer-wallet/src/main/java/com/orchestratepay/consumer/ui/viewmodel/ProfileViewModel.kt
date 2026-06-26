@@ -21,7 +21,9 @@ data class ProfileState(
     val error: String? = null
 )
 
-class ProfileViewModel : ViewModel() {
+class ProfileViewModel(
+    private val apiClient: ConsumerApiClientInstance = ConsumerApiClient
+) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileState())
     val state: StateFlow<ProfileState> = _state.asStateFlow()
@@ -36,7 +38,7 @@ class ProfileViewModel : ViewModel() {
     fun loadProfile() {
         _state.value = _state.value.copy(isLoading = true, error = null)
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.getProfile() }
+            runCatching { apiClient.getProfile() }
                 .onSuccess { profile ->
                     _state.value = _state.value.copy(
                         displayName = profile.displayName ?: "",
@@ -56,7 +58,7 @@ class ProfileViewModel : ViewModel() {
     fun updateProfile(displayName: String?, smsOptIn: Boolean) {
         _state.value = _state.value.copy(isSaving = true, error = null, updateSuccess = false)
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.updateProfile(displayName, smsOptIn) }
+            runCatching { apiClient.updateProfile(displayName, smsOptIn) }
                 .onSuccess {
                     _state.value = _state.value.copy(isSaving = false, updateSuccess = true)
                 }

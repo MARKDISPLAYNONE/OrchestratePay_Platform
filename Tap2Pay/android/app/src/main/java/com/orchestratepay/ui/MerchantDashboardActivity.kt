@@ -235,10 +235,11 @@ class MerchantDashboardActivity : AppCompatActivity() {
                 }
 
                 startActivity(Intent(this, ReceiptActivity::class.java).apply {
-                    putExtra("txn_id",       result.txnId)
-                    putExtra("mpesa_ref",    result.mpesaRef)
-                    putExtra("amount_cents", result.amountCents)
+                    putExtra("txn_id",        result.txnId)
+                    putExtra("mpesa_ref",     result.mpesaRef)
+                    putExtra("amount_cents",  result.amountCents)
                     putExtra("merchant_name", result.merchantName)
+                    putExtra("consumer_phone", result.consumerPhone)
                 })
                 resetForNextPayment()
             }

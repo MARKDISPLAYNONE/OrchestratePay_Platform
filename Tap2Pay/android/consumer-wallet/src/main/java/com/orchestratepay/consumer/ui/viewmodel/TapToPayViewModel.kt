@@ -18,12 +18,12 @@ data class TapToPayState(
     val qrError: String? = null
 )
 
-class TapToPayViewModel : ViewModel() {
+class TapToPayViewModel(
+    private val qrManager: QrTokenManager = QrTokenManager()
+) : ViewModel() {
 
     private val _state = MutableStateFlow(TapToPayState())
     val state: StateFlow<TapToPayState> = _state.asStateFlow()
-
-    private val qrManager = QrTokenManager()
     private var countdownJob: Job? = null
 
     fun loadQr() {

@@ -81,7 +81,7 @@ class ConsumerNotificationService : FirebaseMessagingService() {
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle(getString(com.orchestratepay.consumer.R.string.payment_confirmed))
+            .setContentTitle(getString(R.string.payment_confirmed))
             .setContentText(body)
             .setAutoCancel(true)
             .setContentIntent(pending)

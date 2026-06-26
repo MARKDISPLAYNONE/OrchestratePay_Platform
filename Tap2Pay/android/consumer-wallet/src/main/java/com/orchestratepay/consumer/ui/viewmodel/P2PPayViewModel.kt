@@ -16,7 +16,9 @@ sealed class P2pTokenState {
     data class Error(val message: String) : P2pTokenState()
 }
 
-class P2PPayViewModel : ViewModel() {
+class P2PPayViewModel(
+    private val apiClient: ConsumerApiClientInstance = ConsumerApiClient
+) : ViewModel() {
 
     private val _tokenState = MutableStateFlow<P2pTokenState>(P2pTokenState.Idle)
     val tokenState: StateFlow<P2pTokenState> = _tokenState.asStateFlow()
@@ -24,7 +26,7 @@ class P2PPayViewModel : ViewModel() {
     fun requestP2pToken(amountCents: Int? = null) {
         _tokenState.value = P2pTokenState.Loading
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.requestP2pToken(amountCents) }
+            runCatching { apiClient.requestP2pToken(amountCents) }
                 .onSuccess { resp -> _tokenState.value = P2pTokenState.Success(resp) }
                 .onFailure { err -> _tokenState.value = P2pTokenState.Error(err.message ?: "Failed to generate P2P token") }
         }

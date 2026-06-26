@@ -17,7 +17,9 @@ data class HomeState(
     val error: String? = null
 )
 
-class HomeViewModel : ViewModel() {
+class HomeViewModel(
+    private val apiClient: ConsumerApiClientInstance = ConsumerApiClient
+) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state.asStateFlow()
@@ -26,7 +28,7 @@ class HomeViewModel : ViewModel() {
         _state.value = _state.value.copy(isLoadingTransactions = true, isLoadingLoyalty = true, error = null)
 
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.getTransactions(limit = 3) }
+            runCatching { apiClient.getTransactions(limit = 3) }
                 .onSuccess { resp ->
                     _state.value = _state.value.copy(
                         recentTransactions = resp.transactions,
@@ -42,7 +44,7 @@ class HomeViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.getLoyalty() }
+            runCatching { apiClient.getLoyalty() }
                 .onSuccess { resp ->
                     val total = resp.balances.sumOf { it.pointsBalance }
                     _state.value = _state.value.copy(

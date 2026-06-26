@@ -23,7 +23,9 @@ sealed class PaymentState {
     data class Error(val message: String, val canRetry: Boolean = true) : PaymentState()
 }
 
-class NfcTagPaymentViewModel : ViewModel() {
+class NfcTagPaymentViewModel(
+    private val apiClient: ConsumerApiClientInstance = ConsumerApiClient
+) : ViewModel() {
 
     private val _state = MutableStateFlow<PaymentState>(PaymentState.Idle)
     val state: StateFlow<PaymentState> = _state.asStateFlow()
@@ -33,7 +35,7 @@ class NfcTagPaymentViewModel : ViewModel() {
     fun loadMerchant(mid: String) {
         _state.value = PaymentState.LoadingMerchant(mid)
         viewModelScope.launch {
-            runCatching { ConsumerApiClient.getMerchantInfo(mid) }
+            runCatching { apiClient.getMerchantInfo(mid) }
                 .onSuccess { info -> _state.value = PaymentState.MerchantLoaded(info) }
                 .onFailure { _state.value = PaymentState.Error("Could not load merchant info") }
         }
@@ -45,7 +47,7 @@ class NfcTagPaymentViewModel : ViewModel() {
 
         viewModelScope.launch {
             runCatching {
-                ConsumerApiClient.payMerchant(
+                apiClient.payMerchant(
                     merchantId = mid,
                     amountCents = amountCents,
                     idempotencyKey = idempotencyKey,
@@ -66,7 +68,7 @@ class NfcTagPaymentViewModel : ViewModel() {
             while (secondsRemaining > 0) {
                 _state.value = PaymentState.WaitingForMpesa(txnId, secondsRemaining)
                 
-                runCatching { ConsumerApiClient.getTransactionStatus(txnId) }
+                runCatching { apiClient.getTransactionStatus(txnId) }
                     .onSuccess { status ->
                         when (status.status) {
                             "CONFIRMED" -> {

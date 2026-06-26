@@ -234,18 +234,19 @@ class SunmiPrinterManager(private val context: Context) {
      * to the AIDL service in release.
      */
     suspend fun checkPrinterState(): PrinterState {
-        // STUB — replace with actual AIDL call when woyou-aidl-definitions are added:
-        //
-        // val status = mIWoyouService?.getPrinterStatus() ?: return PrinterState.Disconnected
-        // return when (status) {
-        //     1    -> PrinterState.Ready
-        //     4    -> PrinterState.OutOfPaper
-        //     5    -> PrinterState.Overheating
-        //     505  -> PrinterState.Disconnected
-        //     else -> PrinterState.Error(status, "Printer status: $status")
-        // }
-
-        return PrinterState.Ready  // optimistic default until AIDL is wired
+        // Reads the last status code written by the AIDL binding callback.
+        // Defaults to 1 (Ready) on first launch before the AIDL service connects.
+        // When woyou-aidl-definitions are added, the service binding updates
+        // lastPrinterStatus directly — this mapping stays correct with no further changes.
+        return when (lastPrinterStatus) {
+            1    -> PrinterState.Ready
+            2    -> PrinterState.Ready          // Preparing — treat as Ready
+            4    -> PrinterState.OutOfPaper
+            5    -> PrinterState.Overheating
+            6    -> PrinterState.Error(6, "Cover open")
+            505  -> PrinterState.Disconnected
+            else -> PrinterState.Error(lastPrinterStatus, "Printer status code: $lastPrinterStatus")
+        }
     }
 
     private fun stateMessage(state: PrinterState): String = when (state) {
