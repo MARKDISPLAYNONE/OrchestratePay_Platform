@@ -65,6 +65,9 @@ dependencies {
     // QR code generation
     implementation("com.google.zxing:core:3.5.3")
 
+    // ML Kit barcode scanning — decodes P2P QR tokens in P2PQrScannerActivity
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+
     // CameraX for QR scanning
     val cameraxVersion = "1.3.1"
     implementation("androidx.camera:camera-core:$cameraxVersion")
