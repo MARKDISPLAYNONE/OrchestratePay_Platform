@@ -1,6 +1,6 @@
 # OrchestratePay — NFC Tap-to-Pay Platform
 
-M-Pesa NFC/QR payments for Kenyan merchants. A merchant taps an NFC sticker on their Sunmi P2 Pro terminal or scans a QR code; the consumer's phone receives an M-Pesa STK Push and enters their PIN. Payment confirmed in seconds, receipt printed instantly.
+M-Pesa NFC/QR payments for Kenyan consumers & merchants. A consumer taps a merchant's NFC sticker, Sunmi P2 Pro terminal or scans a QR code; the consumer's phone receives an M-Pesa STK Push and enters their PIN. Payment confirmed in seconds, receipt printed instantly.
 
 ## What's Inside
 

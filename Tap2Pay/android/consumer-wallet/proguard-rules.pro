@@ -1,32 +1,7 @@
-# ── Kotlin / reflection ──────────────────────────────────────────────────────
--keepattributes Signature
--keepattributes Exceptions
--keepattributes *Annotation*
--keepattributes EnclosingMethod
--keepattributes InnerClasses
--keepattributes SourceFile,LineNumberTable
--renamesourcefileattribute SourceFile
-
-# ── Retrofit ─────────────────────────────────────────────────────────────────
--keep,allowobfuscation interface * {
-    @retrofit2.http.* <methods>;
-}
--keep class retrofit2.** { *; }
--keepclasseswithmembers class * {
-    @retrofit2.http.* <methods>;
-}
+-include ../common-proguard-rules.pro
 
 # ── Gson / JSON models ───────────────────────────────────────────────────────
 -keep class com.orchestratepay.consumer.api.** { *; }
--keepclassmembers,allowobfuscation class * {
-    @com.google.gson.annotations.SerializedName <fields>;
-}
-
-# ── OkHttp ───────────────────────────────────────────────────────────────────
--dontwarn okhttp3.**
--dontwarn okio.**
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
 
 # ── Firebase / FCM ───────────────────────────────────────────────────────────
 -keep class com.google.firebase.** { *; }
@@ -49,7 +24,3 @@
 
 # ── ViewBinding ──────────────────────────────────────────────────────────────
 -keep class com.orchestratepay.consumer.databinding.** { *; }
-
-# ── Android standard suppressions ────────────────────────────────────────────
--dontwarn javax.annotation.**
--dontwarn kotlin.reflect.jvm.internal.**

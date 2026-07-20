@@ -18,6 +18,7 @@ import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.textfield.TextInputLayout
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
@@ -155,11 +156,13 @@ class P2PQrScannerActivity : AppCompatActivity() {
 
     private fun showPayConfirmation(token: String) {
         val tvInstruction = findViewById<TextView>(R.id.tv_instruction)
+        val tilAmount     = findViewById<TextInputLayout>(R.id.til_amount)
         val etAmount      = findViewById<EditText>(R.id.et_amount)
         val btnConfirm    = findViewById<Button>(R.id.btn_confirm)
         val btnCancel     = findViewById<Button>(R.id.btn_cancel)
 
         tvInstruction.text = "Enter amount to send (or leave blank if preset)"
+        tilAmount.visibility  = View.VISIBLE
         etAmount.visibility   = View.VISIBLE
         btnConfirm.visibility = View.VISIBLE
         btnCancel.visibility  = View.VISIBLE
