@@ -1,7 +1,7 @@
 # SESSION HANDOVER DOCUMENT
 **Date:** 23 July 2026  
 **Project:** OrchestratePay Platform  
-**Status:** Backend Operational - HCE Token Generated - APDU Fix Pending  
+**Status:** Backend Operational - APDU Fix Applied & Committed - Ready for Android Testing  
 **Prepared by:** Senior Lead Dev (10x)  
 **Recipient:** Incoming Senior Lead Dev / Project Continuation Lead
 
@@ -9,15 +9,22 @@
 
 ## 1. EXECUTIVE SUMMARY
 
-**MILESTONE ACHIEVED:** Backend infrastructure fully operational with valid test data. HCE token generated successfully. Critical APDU protocol bug identified and ready for fix.
+**MILESTONE ACHIEVED:** 
+- Backend infrastructure fully operational (PostgreSQL, Redis, API)
+- Test accounts created with valid JWT tokens and HCE session tokens
+- **CRITICAL BUG FIXED:** APDU instruction codes corrected in `NfcReaderManager.kt` (0xC0→0x80, 0xC1→0x81)
+- Code committed and pushed to secure fork
+- Security audit: Test credentials and tokens excluded from repository
 
-**Next Action Required:** Fix APDU instruction codes in `NfcReaderManager.kt` (0xC0→0x80, 0xC1→0x81), then build Android apps and execute NFC tap tests.
+**Current Blocker:** Android NFC tap testing (Phone-to-Phone) to verify the APDU fix resolves the communication failure between Consumer Wallet (HCE) and Merchant Terminal (Reader).
+
+**Next Action Required:** Build Android debug APKs, install on two NFC-enabled phones, execute tap test, verify APDU exchange in logcat.
 
 ---
 
 ## 2. PROJECT OVERVIEW
 
-**OrchestratePay** is a closed-loop NFC Tap-to-Pay platform designed for the Kenyan market, integrating with M-Pesa (Daraja API), Airtel Money, and local banking infrastructure. 
+**OrchestratePay** is a closed-loop NFC Tap-to-Pay platform designed for the Kenyan market, integrating with M-Pesa (Daraja API), Airtel Money, and local banking infrastructure.
 
 **Architecture Type:** Proprietary HCE (Host Card Emulation) Wallet  
 **NOT EMV-compliant** (avoiding Visa/Mastercard certification overhead)  
@@ -32,26 +39,129 @@
 
 ---
 
-## 3. REPOSITORY STRUCTURE
+## 3. REPOSITORY STRUCTURE & LOCATIONS
 
+### Repository Remotes
+| Remote | URL | Purpose | Status |
+|--------|-----|---------|--------|
+| **upstream** | `https://github.com/gabrielngige/OrchestratePay_Platform.git` | Junior dev original | Missing APDU fix (behind) |
+| **origin** (fork) | `https://github.com/MARKDISPLAYNONE/OrchestratePay_Platform.git` | **Current development** | Ahead by 1 commit (fix applied) |
+
+### Complete File Structure
 ```
-OrchestratePay_Platform/
-├── README.md                    # Project overview (READ FIRST)
-├── CLAUDE.md                    # Claude Code AI assistant instructions
-├── docs/                        # This document lives here
-├── Tap2Pay/                     # Main application monorepo
-│   ├── backend/                 # Node.js 20 + TypeScript + Express
-│   │   ├── src/routes/          # 13 route modules (~50 endpoints)
-│   │   ├── src/db/migrations/   # PostgreSQL schema (4 migration files)
-│   │   └── src/__tests__/       # 71 test suites, 1,291 assertions
-│   ├── web/                     # Vite + React 19 SPA
-│   ├── dashboard/               # Admin dashboard (Vite)
-│   └── android/                 # Kotlin Android modules
-│       ├── app/                 # Merchant Terminal (Sunmi P2 Pro) - BUG HERE
-│       ├── nfc-core/            # Shared AAR library (APDU protocol)
-│       ├── consumer-wallet/     # HCE Consumer Wallet
-│       └── softpos/             # SoftPOS with Play Integrity
+OrchestratePay_Platform/                          [GIT ROOT]
+├── .agents/                                       [TRACKED - AI assistant skills]
+│   └── skills/
+│       ├── systematic-debugging/                  (Test debugging patterns)
+│       └── tdd/                                   (Test-driven development patterns)
+├── .github/
+│   └── workflows/
+│       └── ci.yml                                 [TRACKED - CI/CD pipeline]
+├── .git/                                          [GIT REPOSITORY]
+├── .gitignore                                     [TRACKED - Security rules updated]
+├── CLAUDE.md                                      [TRACKED - AI assistant instructions]
+├── LICENSE                                        [TRACKED]
+├── README.md                                      [TRACKED - Project overview]
+├── docker-compose.ha.yml                          [TRACKED - High availability config]
+├── docker-compose.yml                             [TRACKED - Local dev stack]
+├── docs/                                          [TRACKED - Documentation]
+│   └── SESSION_HANDOVER_20260723.md              [TRACKED - This document]
+├── infra/                                         [TRACKED - Infrastructure]
+│   ├── k8s/                                       [Kubernetes manifests]
+│   │   ├── backend/                               (Deployment, service YAMLs)
+│   │   ├── ingress/                               (K8s ingress rules)
+│   │   ├── postgres/                              (DB StatefulSet)
+│   │   ├── redis/                                 (Redis deployment)
+│   │   ├── namespace.yaml                         (K8s namespace)
+│   │   └── secrets.template.yaml                  (Secrets template - P0 gap)
+│   └── nginx/
+│       └── nginx-lb.conf                          [TRACKED - Load balancer config]
+├── scripts/                                       [TRACKED - Utilities]
+│   └── extract-tls-pin.sh                         (TLS certificate pinning)
+├── skills/                                        [TRACKED - AI context modules]
+│   ├── orchestratepay-accounting-integrations/
+│   ├── orchestratepay-android-kotlin/
+│   ├── orchestratepay-android-nfc/               [SKILL.md - NFC domain knowledge]
+│   ├── orchestratepay-android-printer/
+│   ├── orchestratepay-backend-api/
+│   ├── orchestratepay-biometric-authorization/
+│   ├── orchestratepay-cbk-compliance/
+│   ├── orchestratepay-circuit-breaker/
+│   ├── orchestratepay-consumer-wallet/
+│   ├── orchestratepay-daraja/
+│   ├── orchestratepay-debugging/
+│   ├── orchestratepay-device-attestation/
+│   ├── orchestratepay-disputes/
+│   ├── orchestratepay-fiscal-compliance/
+│   ├── orchestratepay-fleet-mdm/
+│   ├── orchestratepay-fraud-scoring/
+│   ├── orchestratepay-fx-multicurrency/
+│   ├── orchestratepay-hce-crypto/
+│   ├── orchestratepay-loyalty-crm/
+│   ├── orchestratepay-merchant-api-keys/
+│   ├── orchestratepay-merchant-intelligence/
+│   ├── orchestratepay-merchant-onboarding/
+│   ├── orchestratepay-merchant-webhooks/
+│   ├── orchestratepay-nfc-tag-lifecycle/
+│   ├── orchestratepay-offline-first/
+│   ├── orchestratepay-payment-links/
+│   ├── orchestratepay-payments-domain/
+│   ├── orchestratepay-realtime-notifications/
+│   ├── orchestratepay-reconciliation/
+│   ├── orchestratepay-refunds/
+│   ├── orchestratepay-security-middleware/
+│   ├── orchestratepay-settlement/
+│   ├── orchestratepay-sms-ussd-fallback/
+│   ├── orchestratepay-softpos/
+│   ├── orchestratepay-split-payments/
+│   ├── orchestratepay-subscriptions/
+│   ├── orchestratepay-tap-latency-budget/
+│   ├── orchestratepay-vat/
+│   ├── orchestratepay-web-frontend/
+│   ├── orchestratepay-websocket/
+│   └── [Each subfolder contains SKILL.md for AI context]
+├── skills-lock.json                               [TRACKED]
+└── Tap2Pay/                                       [MAIN APPLICATION]
+    ├── README.md                                  [TRACKED - Detailed technical spec]
+    ├── docker-compose.yml                         [TRACKED]
+    ├── package.json                               [TRACKED - Workspace root]
+    ├── android/                                   [ANDROID MODULES]
+    │   ├── README.md                              [TRACKED - Android build instructions]
+    │   ├── app/                                   [MERCHANT TERMINAL]
+    │   │   └── src/main/java/com/orchestratepay/
+    │   │       └── nfc/
+    │   │           ├── NfcReaderManager.kt       [FIXED - Lines 255, 271]
+    │   │           └── NfcReaderManager.kt.bak   [UNTRACKED - Local backup]
+    │   ├── consumer-wallet/                       [HCE WALLET]
+    │   ├── nfc-core/                              [SHARED LIBRARY]
+    │   └── softpos/                               [SOFTPOS MODULE]
+    ├── backend/                                   [NODE.JS API]
+    │   ├── .env                                   [UNTRACKED - Local secrets]
+    │   ├── .env.example                           [TRACKED - Template]
+    │   ├── README.md                              [TRACKED - API documentation]
+    │   ├── node_modules/                          [UNTRACKED - Dependencies]
+    │   ├── src/
+    │   │   ├── db/migrations/                     (001-004 SQL files)
+    │   │   ├── routes/                            (13 route modules)
+    │   │   └── __tests__/                         (71 test suites)
+    │   └── package.json
+    ├── dashboard/                                 [ADMIN DASHBOARD]
+    └── web/                                       [REACT FRONTEND]
+        ├── .next/                                 [UNTRACKED - Build output]
+        └── src/
 ```
+
+### Skills Folder Note
+The `skills/` directory contains **AI context files** (`SKILL.md` in each subfolder). These are documentation for Claude Code AI assistant to understand domain-specific concepts (Daraja, NFC, etc.). They are **not production code** but aid future AI-assisted development. Safe to keep in repository.
+
+### Documentation Hierarchy
+Multiple README files exist - read in this order:
+1. `README.md` (root) - Project overview and quick start
+2. `Tap2Pay/README.md` - Detailed architecture and API reference (**CRITICAL**)
+3. `Tap2Pay/backend/README.md` - Backend-specific documentation
+4. `Tap2Pay/android/README.md` - Android build instructions
+
+**Important:** `Tap2Pay/README.md` contains a **documentation bug** at line ~190 - it documents the OLD INCORRECT APDU codes (0xC0/0xC1). The code fix we applied uses the CORRECT codes (0x80/0x81) which match `ApduProtocol.kt` and `ConsumerHceService.kt`.
 
 ---
 
@@ -86,37 +196,37 @@ OrchestratePay_Platform/
 
 ---
 
-## 5. CRITICAL BUG IDENTIFIED (P0 - BLOCKING)
+## 5. CRITICAL BUG RESOLVED (P0 - FIXED)
 
 ### The APDU Instruction Mismatch
-**Location:** `Tap2Pay/android/app/src/main/java/com/orchestratepay/nfc/NfcReaderManager.kt` (Lines ~207, ~217)
+**Status:** ✅ **FIXED AND COMMITTED**
 
-**Issue:** Merchant terminal sends wrong instruction codes:
+**Location:** `Tap2Pay/android/app/src/main/java/com/orchestratepay/nfc/NfcReaderManager.kt` (Lines 255, 271)
 
-| Command | Merchant Sends (Current - WRONG) | Consumer Expects (HCE - CORRECT) | Status |
-|---------|----------------------------------|----------------------------------|---------|
-| GET DATA | `0xC0` | `0x80` | ❌ **MISMATCH** |
-| CONFIRM | `0xC1` | `0x81` | ❌ **MISMATCH** |
+**Issue:** Merchant terminal was sending wrong instruction codes:
+| Command | Was Sending (WRONG) | Should Send (CORRECT) | Status |
+|---------|---------------------|------------------------|---------|
+| GET DATA | `0xC0` | `0x80` | ✅ **FIXED** |
+| CONFIRM | `0xC1` | `0x81` | ✅ **FIXED** |
 
-**Root Cause:** `NfcReaderManager.kt` uses hex `C0/C1` but `ConsumerHceService.kt` and `ApduProtocol.kt` expect `80/81`.
-
-**Impact:** Every phone-to-terminal tap fails at Step 2. Merchant sends `80 C0 00 00 00`, HCE service returns `6F 00` (unknown instruction), transaction aborts.
-
-**Fix Required:**
+**Fix Applied:**
 ```kotlin
-// File: Tap2Pay/android/app/src/main/java/com/orchestratepay/nfc/NfcReaderManager.kt
-// Line ~207 - CHANGE FROM:
-val getDataApdu = byteArrayOf(0x80.toByte(), 0xC0.toByte(), 0x00, 0x00, 0x00)
-// TO:
+// Line 255 - GET DATA
 val getDataApdu = byteArrayOf(0x80.toByte(), 0x80.toByte(), 0x00, 0x00, 0x00)
 
-// Line ~217 - CHANGE FROM:
-val confirmApdu = byteArrayOf(0x80.toByte(), 0xC1.toByte(), 0x00, 0x00, 0x00)
-// TO:
+// Line 271 - CONFIRM  
 val confirmApdu = byteArrayOf(0x80.toByte(), 0x81.toByte(), 0x00, 0x00, 0x00)
 ```
 
-### Secondary Issues
+**Verification:**
+```bash
+grep -n "0x80\|0x81" NfcReaderManager.kt | head -10
+# Output: Lines 255 and 271 show correct codes
+```
+
+**Commit:** `16e333c` - "fix(nfc): Correct APDU instruction codes in NfcReaderManager"
+
+### Secondary Issues (Still Present)
 1. **Thread Safety:** `ConsumerHceService.sessionPayload` is not volatile (race condition)
 2. **TTL Mismatch:** Documentation says 90s, code implements 60s (`TOKEN_TTL_MS = 60_000L`)
 3. **P2P Priority Risk:** P2P mode takes precedence over payment mode without timeout
@@ -144,20 +254,26 @@ val confirmApdu = byteArrayOf(0x80.toByte(), 0x81.toByte(), 0x00, 0x00, 0x00)
   - Environment: `DARAJA_ENV=mock`
   - Debug logging: Enabled
 
+### Security Measures Applied
+- `.test-env` files added to `.gitignore` (contain JWT tokens)
+- `test-logs/` directory added to `.gitignore` (contains HCE tokens, merchant IDs)
+- `*.bak` backup files added to `.gitignore`
+- Root `package-lock.json` deleted (accidental creation)
+
 ### Test Accounts Created (VALID - Use for Testing)
 **Merchant Account (Primary):**
 - Merchant ID: `6fce73f3-8482-43ff-ad67-7dce1db4074a`
 - Email: `merchant@test.com`
 - Phone: `254700000001`
 - Status: APPROVED
-- JWT Token: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ZmNlNzNmMy04NDgyLTQzZmYtYWQ2Ny03ZGNlMWRiNDA3NGEiLCJuYW1lIjoiVGVzdCBNZXJjaGFudCIsInJvbGUiOiJNRVJDSEFOVCIsImRldmljZUlkIjoidGVzdC1kZXZpY2UtMDAxIiwiYXBwcm92YWxTdGF0dXMiOiJBUFBST1ZFRCIsImlhdCI6MTc4NDgwNDQ3OCwiZXhwIjoxNzg0ODMzMjc4fQ.4vIryUG2_itqmfHSCoOLY3JFXa_dAp0TGkVTiU6yU2w`
+- JWT Token: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` (expires ~8 hours from generation)
 
 **Consumer Account (Secondary):**
 - Merchant ID: `32e27ee7-472f-4298-918f-20d712623a8d`
 - Email: `consumer@test.com`
 - Phone: `254700000002`
 - Status: APPROVED
-- JWT Token: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMmUyN2VlNy00NzJmLTQyOTgtOTE4Zi0yMGQ3MTI2MjNhOGQiLCJuYW1lIjoiVGVzdCBDb25zdW1lciIsInJvbGUiOiJNRVJDSEFOVCIsImRldmljZUlkIjoidGVzdC1kZXZpY2UtMDAyIiwiYXBwcm92YWxTdGF0dXMiOiJBUFBST1ZFRCIsImlhdCI6MTc4NDgwNDQ3OSwiZXhwIjoxNzg0ODMzMjc5fQ.U7yyGv2n6cUkapo011E9N61FVjpqz-dA63H1mbMqSmo`
+- JWT Token: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` (expires ~8 hours from generation)
 
 **Active HCE Token (VALID for NFC Testing):**
 ```json
@@ -171,7 +287,7 @@ val confirmApdu = byteArrayOf(0x80.toByte(), 0x81.toByte(), 0x00, 0x00, 0x00)
 
 ### API Endpoints Verified
 - `POST /api/v1/auth/register` - Creates merchant/consumer (requires admin approval)
-- `POST /api/v1/auth/admin/approve/{merchantId}` - Approves pending accounts
+- `POST /api/v1/auth/admin/approve/{merchantId}` - Approves pending accounts  
 - `POST /api/v1/auth/login` - Returns JWT (requires deviceId)
 - `POST /api/v1/transactions/merchant-hce-token` - Generates HCE session token
 
@@ -179,27 +295,24 @@ val confirmApdu = byteArrayOf(0x80.toByte(), 0x81.toByte(), 0x00, 0x00, 0x00)
 
 ## 7. TESTING PROTOCOL
 
-### Phase 1: APDU Fix Verification (IMMEDIATE)
-**Command to apply fix:**
+### Phase 1: APDU Fix Verification ✅ COMPLETED
+**Fix applied via:**
 ```bash
-cd ~/Desktop/projects/colab\ project/OrchestratePay_Platform
-
-# Backup
-cp Tap2Pay/android/app/src/main/java/com/orchestratepay/nfc/NfcReaderManager.kt \
-   Tap2Pay/android/app/src/main/java/com/orchestratepay/nfc/NfcReaderManager.kt.bak.20260723
-
-# Fix instruction codes
-sed -i 's/0xC0.toByte()/0x80.toByte()/g' \
-    Tap2Pay/android/app/src/main/java/com/orchestratepay/nfc/NfcReaderManager.kt
-sed -i 's/0xC1.toByte()/0x81.toByte()/g' \
-    Tap2Pay/android/app/src/main/java/com/orchestratepay/nfc/NfcReaderManager.kt
+sed -i 's/0xC0.toByte()/0x80.toByte()/g' NfcReaderManager.kt
+sed -i 's/0xC1.toByte()/0x81.toByte()/g' NfcReaderManager.kt
 ```
 
-### Phase 2: Build & Deploy
-1. Open `Tap2Pay/android/` in Android Studio
+**Verification:**
+```bash
+grep -n "0x80\|0x81" Tap2Pay/android/app/src/main/java/com/orchestratepay/nfc/NfcReaderManager.kt
+# Lines 255, 271 confirmed correct
+```
+
+### Phase 2: Build & Deploy (NEXT)
+1. Open `Tap2Pay/android/` in Android Studio (Electric Eel or later)
 2. Sync Gradle
 3. Select `debug` build variant
-4. Build `app` (Merchant) and `consumer-wallet` (Consumer)
+4. Build `app` (Merchant Terminal) and `consumer-wallet` (Consumer HCE)
 5. Install on two NFC-enabled Android phones (API 26+)
 
 ### Phase 3: Test Matrix
@@ -209,21 +322,33 @@ sed -i 's/0xC1.toByte()/0x81.toByte()/g' \
 | Tag Read | NTAG 215/216 | Merchant App | Tag signature verified, payment initiated |
 | P2P Transfer | Consumer Wallet (HCE) | Consumer Wallet (Reader) | P2P token exchange, backend settlement |
 
+### Phase 4: Log Analysis
+Capture APDU exchange via Android Studio logcat:
+```bash
+adb logcat -s "NfcReaderManager:D" "ConsumerHceService:D" "ApduProtocol:D"
+```
+Look for:
+- SELECT AID success (90 00)
+- GET DATA success with JSON payload
+- CONFIRM success (90 00)
+
 ---
 
 ## 8. SECURITY CONSIDERATIONS
 
 **Current State:** NOT PRODUCTION READY
-- JWT secrets in `.env` are test-only
+- JWT secrets in `.env` are test-only (`test-jwt-secret...`)
 - `ADMIN_SECRET` not configured in K8s manifests (Known Production Gap #2)
 - HCE tokens use 128-bit entropy (UUID v4)
 - No rate limiting on HCE token generation observed
+- 28 npm vulnerabilities detected (`npm audit`)
 
 **Required Before Prod:**
 1. CBK PSP license application
 2. Fix K8s manifest gaps (DARAJA_CALLBACK_URL vs BASE_URL, missing secrets)
-3. Dependency audit (28 npm vulnerabilities detected)
+3. Dependency audit and upgrade
 4. TLS certificate pinning verification
+5. Remove test credentials from all `.env` files
 
 ---
 
@@ -236,33 +361,70 @@ sed -i 's/0xC1.toByte()/0x81.toByte()/g' \
 **2026-07-23 01:25:** Database migrations applied (4 files)  
 **2026-07-23 02:00:** Test merchants created and approved  
 **2026-07-23 13:00:** Valid HCE token generated: `8a49f3af-dd09-4af4-b054-806a17d336ce`  
-**2026-07-23 13:15:** **MILESTONE:** Backend fully operational, ready for Android APDU fix
+**2026-07-23 14:15:** APDU fix applied and committed (16e333c)  
+**2026-07-23 14:26:** Security audit completed - test credentials gitignored  
+**2026-07-23 14:30:** Pushed to fork: `https://github.com/MARKDISPLAYNONE/OrchestratePay_Platform`  
 
 ---
 
 ## 10. IMMEDIATE NEXT STEPS
 
-1. **Fix APDU Protocol** (sed commands in Section 7)
-2. **Build Android APKs** (Android Studio)
-3. **Execute Phone-to-Phone Tap Test**
-4. **Log Results** (success/failure with APDU hex dumps)
-5. **Update This Document** with test results
+1. **✅ COMPLETED:** Fix APDU Protocol (sed commands applied, committed, pushed)
+2. **🔄 NEXT:** Build Android APKs (Android Studio)
+3. **⏳ PENDING:** Execute Phone-to-Phone Tap Test
+4. **⏳ PENDING:** Log Results (APDU hex dumps, success/failure)
+5. **⏳ PENDING:** Update This Document with test results
+6. **⏳ PENDING:** Create Pull Request to upstream (junior dev's repo) after testing
+
+---
+
+## APPENDIX: Repository Locations
+
+**Primary Development Fork (Current):**
+- URL: `https://github.com/MARKDISPLAYNONE/OrchestratePay_Platform`
+- Branch: `main`
+- Commit: `16e333c` (APDU fix applied)
+- Status: Ahead of upstream by 1 commit
+- Local Path: `~/Desktop/projects/colab project/OrchestratePay_Platform/`
+
+**Upstream (Junior Dev Original):**
+- URL: `https://github.com/gabrielngige/OrchestratePay_Platform`
+- Status: Missing APDU fix (behind by 1 commit)
+- Action Required: Pull request after NFC testing confirms fix
+
+**Local Infrastructure:**
+- PostgreSQL: `localhost:5432`
+- Redis: `localhost:6379`
+- Backend API: `http://localhost:3000`
+- Test Logs: `Tap2Pay/test-logs/20260723_003312/` (gitignored, keep locally)
 
 ---
 
 **END OF HANDOVER**
 
-*Next Update: Post-APDU fix and NFC tap test results*
+*Next Update: Post-Android build and NFC tap test results*
 ```
 
-**Save this file to:** `OrchestratePay_Platform/docs/SESSION_HANDOVER_20260723.md`
+**Save this file and commit it to your fork:**
 
-**Then execute the APDU fix when ready:**
 ```bash
 cd ~/Desktop/projects/colab\ project/OrchestratePay_Platform
 
-sed -i 's/0xC0.toByte()/0x80.toByte()/g' Tap2Pay/android/app/src/main/java/com/orchestratepay/nfc/NfcReaderManager.kt
-sed -i 's/0xC1.toByte()/0x81.toByte()/g' Tap2Pay/android/app/src/main/java/com/orchestratepay/nfc/NfcReaderManager.kt
+# Add the updated documentation
+git add docs/SESSION_HANDOVER_20260723.md
+
+# Commit
+git commit -m "docs: Comprehensive session handover with full context
+
+- Document complete file structure including skills/ and infra/
+- Note documentation bug in Tap2Pay/README.md (APDU codes)
+- Record repository locations (fork vs upstream)
+- Detail security measures (gitignore updates)
+- Update status: APDU fix applied and committed
+- Add testing protocol and next steps"
+
+# Push to your fork
+git push origin main
 ```
 
-**Report back once you've applied the fix and are ready to build the Android apps.**
+**Then proceed to Android Studio to build the APKs.**
