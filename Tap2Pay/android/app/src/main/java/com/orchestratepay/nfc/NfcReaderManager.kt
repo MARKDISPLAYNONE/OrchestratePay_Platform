@@ -252,7 +252,7 @@ class NfcReaderManager(
             }
 
             // Step 2 — GET DATA: wallet responds with signed JSON payload
-            val getDataApdu = byteArrayOf(0x80.toByte(), 0xC0.toByte(), 0x00, 0x00, 0x00)
+            val getDataApdu = byteArrayOf(0x80.toByte(), 0x80.toByte(), 0x00, 0x00, 0x00)
             val dataResp    = isoDep.transceive(getDataApdu)
 
             if (!isSW_OK(dataResp)) {
@@ -268,7 +268,7 @@ class NfcReaderManager(
             val exp       = payload.getLong("exp")
 
             // Step 4 — CONFIRM: tells wallet to clear the session (single-use)
-            val confirmApdu = byteArrayOf(0x80.toByte(), 0xC1.toByte(), 0x00, 0x00, 0x00)
+            val confirmApdu = byteArrayOf(0x80.toByte(), 0x81.toByte(), 0x00, 0x00, 0x00)
             isoDep.transceive(confirmApdu)
             isoDep.close()
 

@@ -41,3 +41,23 @@ Thumbs.db
 # ─── Logs ────────────────────────────────────────────────────────────────────
 *.log
 logs/
+
+# === DEVELOPMENT ENVIRONMENT (DO NOT COMMIT) ===
+# Test session files (contain JWT tokens, HCE tokens, passwords)
+.test-env
+Tap2Pay/.test-env
+Tap2Pay/test-logs/
+test-logs/
+*.pid
+*.log
+
+# Backup files
+*.bak
+*.bak.*
+
+# Node modules (should already be ignored but verify)
+**/node_modules/
+
+# Local environment overrides
+.env.local
+.env.*.local
