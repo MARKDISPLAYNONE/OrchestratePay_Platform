@@ -428,3 +428,24 @@ git push origin main
 ```
 
 **Then proceed to Android Studio to build the APKs.**
+---
+
+## APPENDIX: Security Audit Results (23 July 2026)
+
+**Conducted By:** Senior Lead Dev  
+**Scope:** Backend dependencies, credential exposure, NFC transmission security
+
+### Critical Findings:
+1. **NFC APDU Sniffing:** Payload transmitted plaintext over ISO 14443-4. Mitigated by 90s token TTL but documented for CBK.
+2. **JWT Secret:** Test secret in use. Must regenerate with `openssl rand -hex 64` for production.
+3. **NPM Vulnerabilities:** 19 moderate severity (OpenTelemetry/Sentry). Require manual upgrade.
+
+### Mitigations Applied:
+- ✅ `.env` and `test-logs/` gitignored
+- ✅ APDU protocol fixed (reliability, not security)
+- ⚠️ Production readiness checklist created: `docs/PRODUCTION_READINESS_CHECKLIST.md`
+
+### Next Actions:
+- Upgrade Sentry/OpenTelemetry dependencies
+- Implement rate limiting on HCE token generation
+- Fix thread safety in ConsumerHceService
