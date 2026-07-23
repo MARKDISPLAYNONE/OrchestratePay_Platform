@@ -41,7 +41,7 @@ class ConsumerHceService : HostApduService() {
 
         const val DEVICE_TYPE    = "CONSUMER_PHONE"
         const val WALLET_VERSION = 2
-        const val TOKEN_TTL_MS   = 60_000L
+        const val TOKEN_TTL_MS   = 90_000L
     }
 
     private val sessionPayload = java.util.concurrent.atomic.AtomicReference<ByteArray?>(null)
