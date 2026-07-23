@@ -44,21 +44,21 @@ class ConsumerHceService : HostApduService() {
         const val TOKEN_TTL_MS   = 60_000L
     }
 
-    private var sessionPayload: ByteArray? = null
+    private val sessionPayload = java.util.concurrent.atomic.AtomicReference<ByteArray?>(null)
 
     override fun processCommandApdu(commandApdu: ByteArray, extras: Bundle?): ByteArray {
         if (commandApdu.size < 4) return SW_UNKNOWN
         return when (commandApdu[1]) {
             INS_SELECT -> {
-                sessionPayload = buildSessionPayload()
-                if (sessionPayload != null) SW_OK else SW_NOT_FOUND
+                val payload = buildSessionPayload(); sessionPayload.set(payload)
+                if (sessionPayload.get() != null) SW_OK else SW_NOT_FOUND
             }
             INS_GET_DATA -> {
-                val payload = sessionPayload ?: return SW_NOT_FOUND
+                val payload = sessionPayload.get() ?: return SW_NOT_FOUND
                 payload + SW_OK
             }
             INS_CONFIRM -> {
-                sessionPayload = null
+                sessionPayload.set(null)
                 P2PHceSession.clear()  // clear P2P session on confirm (single-use)
                 SW_OK
             }
@@ -67,7 +67,7 @@ class ConsumerHceService : HostApduService() {
     }
 
     override fun onDeactivated(reason: Int) {
-        sessionPayload = null
+        sessionPayload.set(null)
     }
 
     private fun buildSessionPayload(): ByteArray? {
