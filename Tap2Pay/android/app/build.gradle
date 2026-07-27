@@ -8,14 +8,14 @@ plugins {
 }
 
 android {
-    compileSdk 34
+    compileSdk 35
     namespace "com.orchestratepay"
 
     defaultConfig {
         applicationId "com.orchestratepay"
         minSdk 26               // Android 8 minimum — NFC HCE stable from API 19,
                                 // but we need API 26 for newer Kotlin coroutines support
-        targetSdk 34
+        targetSdk 35
         versionCode 1
         versionName "1.0.0"
 
