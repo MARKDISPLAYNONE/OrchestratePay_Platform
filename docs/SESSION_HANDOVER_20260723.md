@@ -1,7 +1,7 @@
 # SESSION HANDOVER DOCUMENT
-**Date:** 24 July 2026  
+**Date:** 27 July 2026  
 **Project:** OrchestratePay Platform  
-**Status:** Code Complete & System Verified - Production Hardening Remaining  
+**Status:** Android SDK Fixed - Build In Progress - NFC Testing Ready  
 **Prepared by:** Senior Lead Dev (10x)  
 **Recipient:** Incoming Senior Lead Dev / Project Continuation Lead
 
@@ -10,23 +10,22 @@
 ## 1. EXECUTIVE SUMMARY
 
 **ACHIEVEMENTS:**
-- ✅ Backend infrastructure operational and VERIFIED (login, dashboard, APIs working)
-- ✅ **3 critical Android bugs FIXED:**
-  1. APDU instructions (0xC0→0x80, 0xC1→0x81) - Commit 16e333c
-  2. Thread safety (AtomicReference) - Commit 8ef53d8  
-  3. TTL consistency (60s→90s) - Commit 36a9c5c
-- ✅ Security audit completed, 4 comprehensive docs created
-- ✅ **11 commits ahead** of upstream (gabrielngige)
+- ✅ Backend infrastructure operational and VERIFIED
+- ✅ **4 Android fixes COMMITTED:**
+  1. APDU instructions (0xC0→0x80, 0xC1→0x81) - 16e333c
+  2. Thread safety (AtomicReference) - 8ef53d8
+  3. TTL consistency (60s→90s) - 36a9c5c
+  4. **SDK 35 update (consumer-wallet & app)** - 186521c
+- ✅ Security audit completed, 5 docs created
+- ✅ **13 commits ahead** of upstream
 
-**VERIFIED WORKING:**
-- Merchant login (merchant@test.com / TestPass123)
-- Consumer login (consumer2@test.com / TestPass123)
-- Dashboard, transactions, analytics, settlements
-- Backend API (:3000), Web frontend (:3001), PostgreSQL, Redis
+**CURRENT STATUS:**
+- Android Studio: Gradle sync completed
+- SDK fix: Applied (compileSdk 34→35, targetSdk 34→35)
+- Next: Clean build → Install APKs → NFC test
 
-**PENDING:**
-- NFC Phone-to-Phone test (blocked on 2nd phone hardware)
-- Production hardening (JWT secret, K8s manifests, CBK license)
+**BLOCKER:**
+- NFC Phone-to-Phone test (awaiting 2nd phone connection to Android Studio)
 
 ---
 
@@ -35,104 +34,123 @@
 | Remote | Commits | Status |
 |--------|---------|--------|
 | **upstream** (gabrielngige) | 0 | Behind |
-| **origin** (MARKDISPLAYNONE) | **11** | **Current** |
+| **origin** (MARKDISPLAYNONE) | **13** | **Current** |
 
-**Commits Made:**
-1. 16e333c - APDU fix
-2. 8ef53d8 - Thread safety
-3. 36a9c5c - TTL fix
-4. 39bb40a - Session handover v1
-5. 07a1d92 - Security audit docs
-6. 8f4a279 - iOS limitations
-7. 1e3c431 - Project status summary
-8. de2c160 - Session handover v2
-9. 36a9c5c - TTL fix commit
-10. 46026a7 - Production checklist v2
-11. 4bcd77e - Production checklist final
+**Latest Commits:**
+- 186521c - SDK 35 update (fixes nfc-core dependency)
+- 24b761a - Session handover final
+- 4bcd77e - Production checklist
+- 36a9c5c - TTL fix
+- 8ef53d8 - Thread safety
+- 16e333c - APDU fix
 
 ---
 
-## 3. DOCUMENTATION CREATED
+## 3. ANDROID BUILD STATUS
 
-| File | Purpose | Status |
-|------|---------|--------|
-| `SESSION_HANDOVER_20260723.md` | This document | ✅ |
-| `ANDROID_NFC_TESTING_PROTOCOL.md` | Test procedures | ✅ |
-| `IOS_LIMITATIONS_AND_FALLBACK.md` | iPhone QR strategy | ✅ |
-| `PRODUCTION_READINESS_CHECKLIST.md` | Security/infra tracking | ✅ |
-| `PROJECT_STATUS_SUMMARY.md` | Executive summary | ✅ |
+**FIXED:**
+- ✅ `consumer-wallet/build.gradle.kts`: compileSdk 35, targetSdk 35
+- ✅ `app/build.gradle`: compileSdk 35, targetSdk 35
+- ✅ Gradle sync completed (17 min initial build)
 
----
+**IN PROGRESS:**
+- ⏳ Clean build → Rebuild
+- ⏳ Install Consumer Wallet APK on Phone A
+- ⏳ Install Merchant Terminal APK on Phone B
+- ⏳ Execute NFC tap test
 
-## 4. SYSTEM VERIFICATION (24 July 2026)
-
-| Component | Status | URL | Test Result |
-|-----------|--------|-----|-------------|
-| Backend API | ✅ | :3000 | Health check OK |
-| Web Frontend | ✅ | :3001 | Login working |
-| PostgreSQL | ✅ | :5432 | 4 migrations |
-| Redis | ✅ | :6379 | PONG verified |
-| Merchant Portal | ✅ | /merchant/dashboard | Full access |
-| Consumer Portal | ✅ | /consumer/dashboard | Full access |
-
-**Working Credentials:**
-- **Merchant:** `merchant@test.com` / `TestPass123` / Any device ID
-- **Consumer:** `consumer2@test.com` / `TestPass123` (email login, not phone/pin)
+**NEXT STEPS:**
+1. Android Studio: Build → Clean Project
+2. Android Studio: Build → Rebuild Project
+3. Connect Phone A → Run consumer-wallet
+4. Connect Phone B → Run app (Merchant)
 
 ---
 
-## 5. WHAT'S ACTUALLY PENDING
+## 4. DOCUMENTATION
 
-### A. Hardware Blocked (Need 2nd NFC Phone)
-- Android APK build
-- Phone-to-Phone NFC tap test
-- APDU exchange verification
-- PR to upstream
-
-### B. Can Do Now (No Hardware)
-1. **Generate prod JWT secret:** `openssl rand -hex 64`
-2. **Fix K8s manifests:** `DARAJA_CALLBACK_URL` → `BASE_URL`
-3. **Start CBK PSP license app** (3-6 month lead time)
-
-### C. Security (Tracked in Checklist)
-- 19 NPM vulnerabilities (Sentry upgrade - save for after NFC)
-- Database SSL mode
-- Rate limiting on HCE endpoint
+| File | Status | Purpose |
+|------|--------|---------|
+| `SESSION_HANDOVER_20260723.md` | ✅ | This document |
+| `ANDROID_NFC_TESTING_PROTOCOL.md` | ✅ | Step-by-step NFC test procedures |
+| `IOS_LIMITATIONS_AND_FALLBACK.md` | ✅ | iPhone QR strategy |
+| `PRODUCTION_READINESS_CHECKLIST.md` | ✅ | Security/infra tracking |
+| `PROJECT_STATUS_SUMMARY.md` | ✅ | Executive summary |
 
 ---
 
-## 6. CRITICAL FINDINGS
+## 5. SYSTEM VERIFICATION
 
-| Issue | Severity | Status |
-|-------|----------|--------|
-| Consumer login uses **email/password** | N/A | ✅ Verified working |
-| APDU plaintext over NFC | Low | ✅ Accepted (90s TTL) |
-| iOS cannot use HCE | High | ✅ QR fallback documented |
-| NFC_SIGNING_SECRET not set | Medium | ⚠️ Warned in logs, non-blocking |
-
----
-
-## 7. NEXT ACTIONS
-
-**Without 2nd Phone:**
-1. Generate production JWT secret
-2. Fix K8s manifest typos
-3. Start CBK license application
-
-**With 2nd Phone:**
-1. Build APKs in Android Studio
-2. Execute NFC test protocol
-3. Capture APDU logs
-4. Create PR to upstream
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Backend API | ✅ | :3000, login working |
+| Web Frontend | ✅ | :3001, dashboard accessible |
+| PostgreSQL | ✅ | :5432, 4 migrations |
+| Redis | ✅ | :6379, portable binary |
+| **Android Build** | 🔄 | SDK fixed, rebuild in progress |
 
 ---
 
-## 8. REPOSITORY
+## 6. CRITICAL FIXES APPLIED
+
+| Fix | File | Change | Commit |
+|-----|------|--------|--------|
+| APDU Protocol | `NfcReaderManager.kt:255,271` | 0xC0→0x80, 0xC1→0x81 | 16e333c |
+| Thread Safety | `ConsumerHceService.kt:47` | AtomicReference | 8ef53d8 |
+| TTL Consistency | `ConsumerHceService.kt:44` | 60s→90s | 36a9c5c |
+| **SDK Version** | `build.gradle.kts:9,14` | 34→35 | **186521c** |
+
+---
+
+## 7. NFC TEST PREPARATION
+
+**Prerequisites Ready:**
+- ✅ 2 NFC-enabled Android phones identified
+- ✅ Android Studio with project open
+- ✅ Gradle sync completed
+- ✅ SDK version mismatch fixed
+
+**Test Protocol:** See `ANDROID_NFC_TESTING_PROTOCOL.md`
+
+**Success Criteria:**
+1. Phone A (Consumer) → Phone B (Merchant) tap
+2. APDU SELECT → 90 00
+3. APDU GET DATA → JSON + 90 00  
+4. APDU CONFIRM → 90 00
+5. M-Pesa STK Push → Consumer phone
+6. Transaction confirmed in backend logs
+
+---
+
+## 8. IMMEDIATE NEXT ACTIONS
+
+**Now (Android Studio):**
+1. Build → Clean Project
+2. Build → Rebuild Project
+3. Connect Phone A → Run `consumer-wallet`
+4. Connect Phone B → Run `app` (Merchant)
+
+**After APK Install:**
+5. Login Merchant on Phone B (merchant@test.com / TestPass123)
+6. Open Consumer Wallet on Phone A
+7. Tap phones together
+8. Capture logcat output
+
+**If Test Passes:**
+9. Update `ANDROID_NFC_TESTING_PROTOCOL.md` with results
+10. Create PR to upstream (gabrielngige/OrchestratePay_Platform)
+
+---
+
+## 9. REPOSITORY
 
 **Fork:** https://github.com/MARKDISPLAYNONE/OrchestratePay_Platform  
 **Local:** `~/Desktop/projects/colab project/OrchestratePay_Platform/`  
-**Status:** 11 commits ahead, production-ready code, pending infrastructure
+**Commits:** 13 ahead of upstream  
+**Status:** SDK fixed, ready for NFC hardware test
 
 ---
 
 **END OF HANDOVER**
+
+*Next: Execute Clean → Rebuild in Android Studio*
