@@ -1,0 +1,235 @@
+---
+
+**UPDATED ANDROID_NFC_TESTING_PROTOCOL.md:**
+
+```markdown
+# ANDROID NFC TESTING PROTOCOL
+**Project:** OrchestratePay Platform  
+**Date:** 27 July 2026  
+**Status:** Ready for Execution  
+**Prerequisites:** 2x NFC-enabled Android phones (API 26+), Android Studio, Working Backend
+
+---
+
+## 🎯 TEST OBJECTIVE
+
+Verify the APDU protocol fix (0xC0→0x80, 0xC1→0x81) resolves communication between:
+- **Phone A:** Consumer Wallet (HCE - card emulation)
+- **Phone B:** Merchant Terminal (NFC reader)
+
+**Success:** Successful APDU exchange → M-Pesa STK Push → Payment confirmation
+
+---
+
+## 📋 PRE-TEST CHECKLIST
+
+### 1. Infrastructure Verification
+```bash
+# Terminal 1 - Backend (must be running)
+cd Tap2Pay/backend
+npm run dev
+# Verify: info: Server listening on port 3000
+
+# Terminal 2 - Health check
+curl http://localhost:3000/health
+# Expected: {"status":"ok","timestamp":"..."}
+
+# Terminal 3 - Redis (if not running)
+cd /tmp && ./redis-server.exe --port 6379
+./redis-cli ping  # Expected: PONG
+2. Android Studio Setup
+ Open Tap2Pay/android/ in Android Studio
+ Gradle sync completed (Build → Sync Project with Gradle Files)
+ Build variants: debug selected for both :app and :consumer-wallet
+ No build errors (yellow warnings OK)
+3. Phone Preparation
+ Phone A: Enable Developer Options → USB Debugging
+ Phone B: Enable Developer Options → USB Debugging
+ Phone A: Connect to Android Studio (appears in Device Manager)
+ Phone B: Connect to Android Studio (appears in Device Manager)
+ Both phones: NFC enabled in Settings
+🔧 BUILD & INSTALL
+Step 1: Build APKs
+Bash
+
+# In Android Studio:
+# 1. Build → Clean Project
+# 2. Build → Rebuild Project
+# 3. Verify: BUILD SUCCESSFUL
+Step 2: Install on Phones
+Phone A (Consumer): Run consumer-wallet module
+
+Login: consumer2@test.com / TestPass123
+Should show: "Ready to Pay" with QR code
+Phone B (Merchant): Run app module
+
+Login: merchant@test.com / TestPass123 / Device ID: any
+Should show: "Tap customer phone or NFC tag"
+🧪 TEST EXECUTION
+TEST 1: Phone-to-Phone HCE Payment (CRITICAL)
+Setup:
+
+Phone A: Consumer Wallet open, logged in
+Phone B: Merchant Terminal open, logged in, showing "Ready for tap"
+Execution:
+
+Align Phone A and Phone B NFC antennas (center-back of phones)
+Distance: 0-2cm
+Hold steady for 2-3 seconds
+Expected Sequence:
+
+Time	Phone B (Merchant)	Phone A (Consumer)
+0s	"Tag detected" vibrate/beep	-
+1s	"Processing..."	-
+2s	-	M-Pesa STK Push arrives
+3s	-	Enter PIN on Phone A (system dialog)
+4s	"Payment Confirmed" KES XXX	-
+APDU Exchange (Verify in Logcat):
+
+text
+
+NfcReaderManager: SELECT AID: F04F52434845535441
+NfcReaderManager: SELECT response: 90 00 ✓
+ConsumerHceService: processCommandApdu: INS=0x80 (GET DATA)
+NfcReaderManager: GET DATA: 80 80 00 00 00 ✓
+NfcReaderManager: JSON payload: {"phone":"254...","token":"..."}
+NfcReaderManager: CONFIRM: 80 81 00 00 00 ✓
+ConsumerHceService: Session cleared (single-use)
+NfcReaderManager: Transaction initiated: txnId=xxx
+Logcat Command:
+
+Bash
+
+adb logcat -s "NfcReaderManager:D" "ConsumerHceService:D" "ApduProtocol:D" "*:S"
+TEST 2: NFC Tag Read (NTAG215)
+Prerequisites:
+
+NTAG215 or NTAG216 sticker programmed with:
+text
+
+orchestratepay://pay?mid=MERCHANT_ID&tid=TAG_ID&v=1&sign=HMAC
+Execution:
+
+Phone B: Merchant Terminal open, logged in
+Tap NTAG215 sticker to back of Phone B
+Expected:
+
+App reads tag
+Displays merchant info
+Fires STK Push to associated consumer phone
+Success Criteria:
+
+ Tag signature verified (HMAC-SHA256)
+ No "Signature Invalid" error
+ STK Push initiated
+TEST 3: P2P Transfer
+Setup:
+
+Phone A: Consumer Wallet → P2P Send → Enter amount → Generate P2P token
+Phone B: Consumer Wallet → P2P Receive (or Merchant Terminal)
+Execution:
+
+Tap Phone A to Phone B
+Expected:
+
+P2P token transmitted via HCE
+Backend processes P2P transfer
+Both wallets show updated balances
+Success Criteria:
+
+ P2P token transmitted successfully
+ Backend settles transfer
+ No "TOKEN_EXPIRED" errors
+TEST 4: Error Handling
+TEST 4a: Expired HCE Token
+
+Generate HCE token
+Wait 90 seconds (or modify code to 5s for testing)
+Attempt tap
+Expected: "Token Expired" error on terminal
+TEST 4b: Invalid Tag (Forged Signature)
+
+Program tag with wrong HMAC signature
+Tap to terminal
+Expected: "Signature Invalid" error, no STK Push
+TEST 4c: Double Tap (Idempotency)
+
+Complete successful payment
+Immediately tap same phones again
+Expected: New transaction (tokens are single-use), not duplicate
+🐛 TROUBLESHOOTING
+Issue: "Tag Not Detected"
+Check	Action
+NFC enabled?	Settings → NFC → ON
+Phone cases?	Remove metal cases (block NFC)
+Antenna alignment?	Center-back of phones, 0-2cm
+Build variant?	Must be debug, not release
+Issue: "SELECT Failed" or "6F 00"
+Cause: APDU instruction mismatch (old bug)
+Fix: Verify NfcReaderManager.kt has:
+
+Kotlin
+
+val getDataApdu = byteArrayOf(0x80.toByte(), 0x80.toByte(), ...) // Not 0xC0
+val confirmApdu = byteArrayOf(0x80.toByte(), 0x81.toByte(), ...) // Not 0xC1
+Issue: "Session Expired" Immediately
+Check	Action
+Phone time?	Check system time is correct
+Backend time?	Run date on server
+Timezone?	Ensure both phones and server same timezone
+Issue: No STK Push Received
+Check	Action
+Backend env?	Must be DARAJA_ENV=mock
+Phone format?	Must be 2547XXXXXXXX
+Sandbox credentials?	Check backend/.env
+Backend logs?	tail -f Tap2Pay/test-logs/*/backend.log
+📸 CAPTURE REQUIREMENTS
+For each test, record:
+
+ Screenshot of both phone screens at each stage
+ Logcat output: adb logcat -d > test[N]-logcat.txt
+ APDU hex dump (if available in logs)
+ Backend logs during transaction
+ Result: PASS / FAIL with notes
+Save to: Tap2Pay/test-logs/2026-07-27-NFC-Test/
+
+✅ SUCCESS CRITERIA SUMMARY
+Test	Critical	Expected Result	Status
+Phone-to-Phone HCE	YES	APDU exchange → STK Push → Confirmation	⬜
+NFC Tag Read	YES	Tag verified → STK Push → Confirmation	⬜
+P2P Transfer	Medium	Token exchange → Settlement	⬜
+Expired Token	Low	Proper error handling	⬜
+Invalid Signature	Low	Rejection before STK Push	⬜
+Idempotency	Medium	No double-charges	⬜
+Overall Status: ⬜ NOT TESTED / ⬜ IN PROGRESS / ⬜ PASSED / ⬜ FAILED
+
+📝 POST-TEST ACTIONS
+If All Tests Pass:
+Update this document with "PASSED" status and date
+Save logcat files to repository
+Create PR to upstream:
+Bash
+
+# GitHub Web:
+# 1. https://github.com/gabrielngige/OrchestratePay_Platform
+# 2. New Pull Request
+# 3. base: gabrielngige/main ← compare: MARKDISPLAYNONE/main
+# 4. Title: "fix(nfc): Resolve APDU protocol mismatch blocking HCE taps"
+# 5. Reference this test protocol
+Notify junior dev: Fix ready for production
+If Tests Fail:
+Capture logs immediately (before they scroll away)
+Document failure mode in this file
+Check APDU instructions in code
+Do NOT push to upstream until resolved
+Revert if needed: git checkout NfcReaderManager.kt.bak
+🔗 QUICK REFERENCE
+Resource	Value
+Backend URL	http://localhost:3000
+Merchant Login	merchant@test.com / TestPass123
+Consumer Login	consumer2@test.com / TestPass123
+HCE Token	Check latest in backend logs
+Key Files	NfcReaderManager.kt, ConsumerHceService.kt, ApduProtocol.kt
+Emergency Logs	Tap2Pay/test-logs/*/backend.log
+
+END OF PROTOCOL
