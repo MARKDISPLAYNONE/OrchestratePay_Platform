@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.orchestratepay.consumer.api.ConsumerApiClientInstance
+
 
 sealed class RegisterState {
     object Idle : RegisterState()

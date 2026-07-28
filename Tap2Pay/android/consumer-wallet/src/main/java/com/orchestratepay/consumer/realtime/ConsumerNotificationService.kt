@@ -10,6 +10,7 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.orchestratepay.consumer.api.ConsumerApiClient
 import com.orchestratepay.consumer.db.ConsumerSessionManager
+import com.orchestratepay.consumer.R
 import com.orchestratepay.consumer.ui.HomeActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

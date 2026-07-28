@@ -3,6 +3,7 @@ package com.orchestratepay.consumer.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.orchestratepay.consumer.api.ConsumerApiClient
+import com.orchestratepay.consumer.api.ConsumerApiClientInstance
 import com.orchestratepay.consumer.api.Transaction
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

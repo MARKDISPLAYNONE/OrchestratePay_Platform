@@ -52,6 +52,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.8.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("androidx.biometric:biometric:1.1.0")
 
     // Network
     implementation("com.squareup.retrofit2:retrofit:2.9.0")

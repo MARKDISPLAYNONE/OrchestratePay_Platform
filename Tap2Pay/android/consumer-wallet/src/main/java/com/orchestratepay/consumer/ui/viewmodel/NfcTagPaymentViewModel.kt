@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.security.SecureRandom
+import com.orchestratepay.consumer.api.ConsumerApiClientInstance
+
 
 sealed class PaymentState {
     object Idle : PaymentState()
