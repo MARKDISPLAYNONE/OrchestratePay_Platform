@@ -18,6 +18,25 @@ Verify the APDU protocol fix (0xC0→0x80, 0xC1→0x81) resolves communication b
 ---
 
 ## 📋 PRE-TEST CHECKLIST
+### ⚠️ 0. MANDATORY PRE-FLIGHT CHECK — Do Not Skip
+
+**Before connecting any phone, confirm these 2 bugs (found 29 July 2026) are fixed:**
+
+```bash
+# Check 1: Launcher icons exist
+find Tap2Pay/android/app/src/main/res -iname "*ic_launcher*"
+# Must return files, not empty
+
+# Check 2: HCE service is registered in manifest
+grep -c "HOST_APDU_SERVICE" Tap2Pay/android/consumer-wallet/src/main/AndroidManifest.xml
+# Must return 1 or higher, NOT 0
+
+# Check 3: Full packaging succeeds (not just Kotlin compile)
+cd Tap2Pay/android
+./gradlew :app:assembleDebug :consumer-wallet:assembleDebug
+# Must show BUILD SUCCESSFUL, and produce real .apk files:
+find . -name "*.apk" -path "*/outputs/*"
+If Check 2 fails: The consumer-wallet APK will install and run, but NFC taps will silently do nothing — no crash, no error, just a phone that doesn't respond. If you skip this check and go straight to phone testing, you will burn significant time debugging what looks like a hardware/antenna problem but is actually a missing manifest declaration.
 
 ### 1. Infrastructure Verification
 
