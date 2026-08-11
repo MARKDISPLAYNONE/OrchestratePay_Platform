@@ -1,270 +1,119 @@
-Got it — here's the fully corrected replacement. Copy everything below into `SESSION_HANDOVER.md`:
+SESSION_HANDOVER.md
+Last Updated: 12 August 2026 (Session 3, continued)
+Project: OrchestratePay Platform
+Status: 🟢 :app module BUILD SUCCESSFUL (verified, clean build) — git commit in progress — hardware testing still pending 2nd phone
+Prepared by: Senior Lead Dev (10x)
+Recipient: Incoming Senior Lead Dev / Project Continuation Lead
 
-```markdown
-# SESSION HANDOVER & ONBOARDING GUIDE
+🎯 QUICK ORIENTATION (Read This First)
+What is this project?
 
-**Last Updated:** 29 July 2026
-**Project:** OrchestratePay Platform
-**Status:** Kotlin Compiles Clean — 1 Confirmed Packaging Bug Found via Full Build Test (Pre-Hardware Validation)
-**Prepared by:** Senior Lead Dev (10x)
-**Recipient:** Incoming Senior Lead Dev / Project Continuation Lead
+NFC Tap-to-Pay platform for Kenyan market
+Integrates with M-Pesa (Daraja API)
+Consumer taps phone/sticker → M-Pesa STK Push → PIN entry → Payment confirmed
+⚠️ Stack Correction (still unconfirmed with product owner): Actual repo uses Vite 6 + React 19 (web), raw pg pool + Joi (backend) — not Next.js/Prisma/Zod. Verify with product owner before making stack-level architectural decisions.
 
----
+Current Status in 7 Bullets:
 
-## 🎯 QUICK ORIENTATION (Read This First)
+✅ Backend operational (login, dashboard, APIs verified working)
+✅ Bug #4 (kapt→KSP) — CONFIRMED FIXED, closed permanently
+✅ Bug #5 (5 post-KSP compile error clusters) — ALL 5 CLOSED. Full breakdown in Findings Log.
+✅ :app:assembleDebug — GENUINE BUILD SUCCESSFUL confirmed 12 Aug 2026, real clean build, 43/46 tasks executed (not cached). First time this build has ever gone fully green.
+🟡 Git commit in progress — fixes verified but not yet committed; icons still staged from prior session; .gitignore update + .bak/.hprof cleanup happening now, before any new commit
+⚠️ package-lock.json — reviewed, looks like safe transitive patch bumps (no Sentry version change), staying as a separate commit per standing rule
+⏳ NFC hardware testing PENDING — confirmed no 2nd phone yet. Code is now ready and waiting the moment hardware arrives.
+🚨 FINDINGS LOG (Chronological, Most Recent First)
+Bug #5: Post-KSP Kotlin Compile Errors — ✅ ALL 5 CLUSTERS CLOSED (12 August 2026)
+Final verification: ./gradlew clean :app:assembleDebug → BUILD SUCCESSFUL in 52s, 46 actionable tasks, 43 executed. Only deprecation warnings remain (non-blocking, tracked separately below).
 
-**What is this project?**
-- NFC Tap-to-Pay platform for Kenyan market
-- Integrates with M-Pesa (Daraja API)
-- Consumer taps phone/sticker → M-Pesa STK Push → PIN entry → Payment confirmed
+Cluster	Issue	Root Cause	Fix	Status
+A	androidx.work.* unresolved in TelemetryWorker.kt	Missing dependency declaration	Added implementation 'androidx.work:work-runtime-ktx:2.11.2' to app/build.gradle (version verified via dl.google.com, not Maven Central — androidx artifacts live on Google's repo)	✅ Closed
+B	OrchestaApiClient unresolved in TagWriterActivity.kt, TelemetryWorker.kt	1-letter typo — real class is OrchestrateApiClient (confirmed via grep: 5 other files already use correct spelling)	sed replace in both files	✅ Closed
+C	NdefFormatable unresolved in TagWriterActivity.kt, DisplayTagWriterActivity.kt	Wrong sub-package: imported from android.nfc instead of android.nfc.tech	Corrected import in both files	✅ Closed
+D	Missing activity_display_tag_writer.xml layout	File never existed — same failure class as historical colors.xml/launcher icon bugs	Created layout with both required views (tv_instruction, tv_url_preview) after reading full Activity file for complete view list	✅ Closed
+E	WsPaymentResult type mismatch in PaymentWebSocketClient.kt (Received/ConnectError passed where Timeout? expected)	Missing explicit generic type witness on suspendCancellableCoroutine { } and withTimeoutOrNull { } — Kotlin inferred too narrow a type from the last-assigned branch instead of the sealed supertype	Added explicit <WsPaymentResult> type arguments to both coroutine builders	✅ Closed
+Lesson applied: All 5 clusters were diagnosed by reading full file contents and confirming root cause via evidence (grep scope checks, file reads) before writing any fix — zero guessed fixes, zero wasted rebuild cycles on wrong theories in this cluster set.
 
-**Current Status in 4 Bullets:**
-1. ✅ **Backend operational** (login, dashboard, APIs verified working)
-2. ✅ **Kotlin compiles clean** across all 4 modules (`app`, `consumer-wallet`, `nfc-core`, `softpos`)
-3. 🔴 **1 confirmed packaging bug** — missing launcher icons in `:app` module (see below)
-4. ⏳ **NFC hardware testing PENDING** (no phone yet; emulator being set up for UI-level validation in the meantime)
+Bug #4: kapt Incompatible with Kotlin 2.2.10 — ✅ CONFIRMED FIXED (closed, see prior session for full history)
+KSP version 2.2.10-2.0.2 verified correct via real build evidence. gradle.properties also carries ksp.useKSP2=false — this flag is likely load-bearing for the fix and should not be removed without re-verifying the build still passes.
 
-**Your Immediate Task:**
-- Fix Bug #1 below (blocks real APK installation)
-- Re-run full `assembleDebug` to confirm APK actually packages
-- Once phone available: execute `ANDROID_NFC_TESTING_PROTOCOL.md`
+Bug #3: Missing colors.xml — ✅ CONFIRMED FIXED (unchanged, ready to commit)
+Bug #1: Launcher Icons — ⚠️ Still staged, not committed (committing now in Step 4 above)
+Bug #2: HCE Service Not Registered — FALSE ALARM, RETRACTED (unchanged, commit 4d77878)
+🖥️ ENVIRONMENT SETUP
+JAVA_HOME: Fixed via .bashrc, no issues.
 
----
+gradle.properties additions (reviewed, confirmed safe):
 
-## 🚨 FINDINGS — 29 July 2026
+text
 
-Found by running `./gradlew :app:assembleDebug :consumer-wallet:assembleDebug` (full APK packaging, not just Kotlin compile). **This is a more thorough test than `compileDebugKotlin` — it catches resource/manifest bugs that pure Kotlin compilation misses.**
+org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8
+ksp.useKSP2=false
+Increased heap likely prevents the JVM crash that produced java_pid10852.hprof earlier this session. ksp.useKSP2=false forces the more stable KSP1 engine — treat as required for Bug #4's fix to hold.
 
-### Bug #1: Missing Launcher Icons (`:app` module) — CONFIRMED REAL
+Standing rule — MINGW64 working directory slips: Multiple "file not found" errors this session were false alarms caused by running commands from the repo root instead of Tap2Pay/android/. Always confirm pwd before treating a missing-file error as real.
 
-**Error (from actual Gradle build failure):**
-```
-AAPT: error: resource mipmap/ic_launcher not found.
-AAPT: error: resource mipmap/ic_launcher_round not found.
-```
+🏗️ PROJECT ARCHITECTURE (Current State)
+text
 
-**Root cause:** `app/src/main/AndroidManifest.xml` references `@mipmap/ic_launcher` and `@mipmap/ic_launcher_round`, but `app/src/main/res/` has no mipmap folders. The app cannot be packaged into an installable APK in this state.
-
-**Status:** ⬜ NOT YET FIXED — blocks Merchant Terminal APK entirely.
-
-**Fix path:** Use Android Studio → right-click `app/src/main/res` → New → Image Asset → generate Launcher Icons (placeholder branding acceptable for now, replace before public launch).
-
-**Confidence:** HIGH — this was caught via an actual `BUILD FAILED` compiler error message, not an absence-based check. Verified reproducible.
-
----
-
-### ~~Bug #2: HCE Service Not Registered in Manifest~~ — FALSE ALARM, CORRECTED 29 July 2026
-
-**Original claim:** Suspected `ConsumerHceService` was not registered in `consumer-wallet`'s manifest, based on a `grep -c "HOST_APDU_SERVICE"` command returning `0`.
-
-**Correction:** Manual verification via VS Code confirmed the manifest **IS correctly configured**:
-```xml
-<service
-    android:name=".hce.ConsumerHceService"
-    android:exported="true"
-    android:permission="android.permission.BIND_NFC_SERVICE">
-    <intent-filter>
-        <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
-    </intent-filter>
-    <meta-data
-        android:name="android.nfc.cardemulation.host_apdu_service"
-        android:resource="@xml/apduservice" />
-</service>
-```
-This is properly wired to `apduservice.xml`, which has a valid AID filter (`F04F52434845535441`) matching the merchant terminal's expected AID.
-
-**Root cause of the false alarm:** Terminal commands (`cat`, `sed`, `grep`) silently returned empty/zero output when reading `AndroidManifest.xml` and `apduservice.xml` in this session, despite both files being confirmed as valid, non-empty, standard UTF-8/CRLF text (verified via `file` command and line counts). The exact reason the Git Bash tools failed to read the content is undetermined — it was NOT an encoding issue as initially suspected.
-
-**Lesson learned:** A `grep`/`cat`/`sed` command returning empty output is **not proof that content is missing** — it can also mean the tool itself failed silently. Absence-of-output is a much weaker signal than an explicit error message (like a real compiler `BUILD FAILED`). When investigating a suspected bug based on missing grep output rather than a hard build error, **verify independently via a GUI editor (VS Code) before documenting it as a confirmed bug.**
-
-**Status:** ✅ NOT A BUG — HCE service registration is correct and complete. No code changes needed.
-
-**Key Lesson (still valid):** `compileDebugKotlin` only checks that Kotlin code type-checks — it does NOT verify manifest wiring or resource references. Always run a full `assembleDebug` before considering a module "done." (This lesson led us to correctly find Bug #1, even though our investigation method for suspected Bug #2 was flawed.)
-
----
-
-## 📚 REQUIRED READING ORDER
-
-**Before You Start Coding:**
-1. **THIS DOCUMENT** (SESSION_HANDOVER.md) - You are here
-2. **PRODUCTION_READINESS_CHECKLIST.md** - What's done vs pending
-
-**Before You Test NFC:**
-3. **ANDROID_NFC_TESTING_PROTOCOL.md** - Step-by-step test procedures
-4. **Tap2Pay/README.md** - Detailed architecture (has APDU documentation bug at line ~190)
-
-**For Context:**
-5. **IOS_LIMITATIONS_AND_FALLBACK.md** - iPhone QR strategy (Apple blocks HCE)
-6. **CLAUDE.md** - AI assistant instructions (if using Claude Code)
-
----
-
-## 🏗️ PROJECT ARCHITECTURE
-
-```
 OrchestratePay_Platform/
 ├── Tap2Pay/
-│   ├── backend/                      # Node.js + Express API (:3000)
-│   ├── web/                          # React frontend (:3001)
-│   └── android/                      # Kotlin Android apps
-│       ├── app/                      # Merchant Terminal (READER)
-│       │   └── [MISSING mipmap icons — Bug #1, confirmed]
-│       ├── consumer-wallet/          # Consumer Wallet (HCE CARD)
-│       │   └── gradlew, gradlew.bat  # Gradle wrapper (committed)
-│       │       [HCE manifest wiring verified CORRECT]
-│       ├── nfc-core/                 # Shared NFC library
-│       └── softpos/                  # SoftPOS module
-├── docs/                             # DOCUMENTATION (start here)
-└── infra/k8s/                        # Kubernetes manifests (needs fixes)
-```
+│   ├── backend/                          # Express + raw pg pool + Joi
+│   │   └── package-lock.json             # ⚠️ Reviewed, safe-looking, separate commit pending
+│   ├── web/                               # Vite 6 + React 19
+│   └── android/
+│       ├── build.gradle                   # ✅ KSP working (2.2.10-2.0.2)
+│       ├── gradle.properties              # ✅ Reviewed — jvmargs + ksp.useKSP2=false, both load-bearing
+│       ├── .gitignore                     # 🟡 Being updated now — adding build_log.txt, *.bak, *.hprof
+│       ├── app/
+│       │   ├── build.gradle               # ✅ KSP + androidx.work, all verified working
+│       │   ├── src/main/res/values/colors.xml                       # ✅ Fixed — committing now
+│       │   ├── src/main/res/layout/activity_display_tag_writer.xml  # ✅ Fixed — committing now
+│       │   ├── [mipmap icons]              # ✅ Committing now
+│       │   └── src/main/java/com/orchestratepay/
+│       │       ├── api/OrchestaApiClient.kt        # ⚠️ Filename still misleading (class inside is OrchestrateApiClient) — cosmetic only, not urgent
+│       │       ├── nfc/TagWriterActivity.kt         # ✅ Fixed (Clusters B+C)
+│       │       ├── nfc/DisplayTagWriterActivity.kt  # ✅ Fixed (Clusters C+D)
+│       │       ├── telemetry/TelemetryWorker.kt     # ✅ Fixed (Clusters A+B)
+│       │       └── realtime/PaymentWebSocketClient.kt  # ✅ Fixed (Cluster E)
+│       ├── consumer-wallet/                # Unaffected, untouched
+│       ├── nfc-core/                       # Unaffected, untouched
+│       └── softpos/                        # Unaffected, untouched
+├── docs/                                   # Modified — separate commit pending
+└── infra/k8s/                              # 2 known P0 pre-deploy fixes still outstanding (see CLAUDE.md)
+🔧 CURRENT BLOCKERS & NEXT STEPS
+Immediate — IN ORDER (git hygiene, no code changes)
+Check current .gitignore contents
+Append build_log.txt, *.bak, *.hprof patterns
+Delete .bak files and .hprof file (build artifacts, never committed)
+Stage verified Android fix set (Bug #4 + #5 + icons + colors.xml) — confirm via git status before committing
+Commit with clear message referencing Bug #4 and Bug #5 resolution
+Separately review/commit backend/package-lock.json
+Separately commit docs/*.md changes
+Confirm final git log --oneline | wc -l (do not trust the stale "22 commits ahead" number — recount live)
+Next — Full System Validation (No Hardware Needed)
+Run full 4-module build to confirm nothing else is masked:
+Bash
 
-**Key Data Flow:**
-```
-Consumer Phone (HCE) → NFC Tap → Merchant Terminal (Reader) →
-Backend API → M-Pesa STK Push → Consumer Phone (PIN)
-```
+./gradlew clean assembleDebug
+Set up Android emulator (Pixel 6, API 34) for UI-level smoke testing — login flow, dashboard render, NFC screens load without crashing (NFC itself won't work on emulator, but screens/navigation can be verified)
+Run full unit test suites for confidence before hardware arrives:
+Bash
 
----
-
-## ✅ WHAT WE'VE ACCOMPLISHED
-
-### 🆕 Build Stabilization — 28 July 2026
-
-**Problem:** `:consumer-wallet:compileDebugKotlin` failed with 150+ cascading errors.
-
-**4 Root Causes Found & Fixed:**
-
-| # | File | Root Cause | Fix |
-|---|------|-----------|-----|
-| 1 | `ConsumerTagWriterActivity.kt` | Wrong import: `android.nfc.NdefFormatable` | Corrected to `android.nfc.tech.NdefFormatable` |
-| 2 | `build.gradle.kts` | Missing `androidx.biometric` dependency | Added `implementation("androidx.biometric:biometric:1.1.0")` |
-| 3 | 8 ViewModels | Missing `ConsumerApiClientInstance` import | Added missing import to each file |
-| 4 | `ConsumerNotificationService.kt` | Missing `R` import (sub-package issue) | Added explicit `R` import |
-
-**Infrastructure Fix:** Generated and committed Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle-wrapper.jar`) — was missing from repo, blocking all terminal/CI builds. Any dev can now run `./gradlew` from a fresh clone.
-
-**Verification:** `./gradlew :consumer-wallet:compileDebugKotlin` → BUILD SUCCESSFUL
-
-### 🆕 Full Packaging Test — 29 July 2026
-
-Ran `./gradlew :app:assembleDebug :consumer-wallet:assembleDebug :nfc-core:assembleDebug :softpos:assembleDebug` — more rigorous than Kotlin compilation alone (validates manifests, resources, packaging).
-
-**Result:** Found 1 confirmed real bug (missing icons). Initially suspected a 2nd bug (HCE manifest wiring) but that was later disproven via manual verification — see correction above.
-
-**Takeaway:** Running the full packaging build before hardware testing is valuable and should remain standard practice — it did catch a genuine issue (Bug #1) that `compileDebugKotlin` alone would have missed.
-
-### Critical Bug Fixes (Prior Sessions — COMPLETE)
-
-| Fix | File | Change | Status |
-|-----|------|--------|--------|
-| **APDU Protocol** | `NfcReaderManager.kt` | 0xC0→0x80, 0xC1→0x81 | ✅ FIXED |
-| **Thread Safety** | `ConsumerHceService.kt` | AtomicReference | ✅ FIXED |
-| **TTL Consistency** | `ConsumerHceService.kt` | 60s→90s | ✅ FIXED |
-| **SDK Version** | `build.gradle.kts` | 34→35 | ✅ FIXED |
-
-### Infrastructure (VERIFIED WORKING)
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| PostgreSQL 18 | ✅ | 4 migrations applied |
-| Redis | ✅ | PONG verified |
-| Backend API | ✅ | Health check OK on :3000 |
-| Web Frontend | ✅ | Login working on :3001 |
-| Android Kotlin Compile | ✅ | All 4 modules clean |
-| Android APK Packaging (`consumer-wallet`) | ✅ | Builds successfully |
-| Android APK Packaging (`app`) | 🔴 | Blocked by Bug #1 (icons) |
-| HCE Core Function (manifest wiring) | ✅ | Verified correct |
-
-### Security Audit — 29 July 2026
-
-**NPM Audit (backend):** 52 vulnerabilities found (19 moderate, 33 high).
-- **Assessment:** Nearly all are `devDependencies` (eslint, jest, ts-jest, ts-node-dev tooling) — not shipped to production, low real-world risk.
-- **One exception requiring attention:** `@sentry/node` (production dependency) depends on vulnerable `@opentelemetry/core`. Fix requires breaking upgrade to `@sentry/node@10.68.0`. **Deferred** — tracked in `PRODUCTION_READINESS_CHECKLIST.md`, to be tested in isolation before applying (not mixed with other changes).
-
-**JWT Secret:** Confirmed `.env` is git-ignored (`git check-ignore` verified) — no secret exposure in repo history. Current value is a dev placeholder (`test-jwt-secret-for-development-only`) — must be rotated to a real generated secret before production deploy.
-
-### Test Accounts (READY FOR TESTING)
-- **Merchant:** `merchant@test.com` / `TestPass123` / Any device ID
-- **Consumer:** `consumer2@test.com` / `TestPass123` (email login)
-- **Backend:** Running with `DARAJA_ENV=mock`
-
----
-
-## 🔧 CURRENT BLOCKERS & NEXT STEPS
-
-### Immediate (No Hardware Needed)
-1. **Fix Bug #1** — Generate launcher icons for `:app` module
-2. Re-run `./gradlew :app:assembleDebug :consumer-wallet:assembleDebug` — confirm both produce real `.apk` files
-3. Set up Android emulator for UI-level smoke testing (login, navigation, no crashes) — validates app before hardware NFC testing
-
-### Pending (Awaiting 2nd NFC Phone)
-4. Execute `ANDROID_NFC_TESTING_PROTOCOL.md` — full hardware tap testing
-
-### Deferred (Tracked, Not Urgent)
-5. `@sentry/node` dependency upgrade (breaking change, needs isolated testing)
-6. JWT_SECRET rotation (do at actual deploy time, not before)
-7. CBK license application — **should be started in parallel now**, 3-6 month lead time, doesn't block dev work
-
----
-
-## 🚨 CRITICAL FINDINGS FOR NEW DEV
-
-| Issue | Impact | Status |
-|-------|--------|--------|
-| APDU Plaintext | NFC payload sniffable | ✅ Accepted (90s TTL mitigation) |
-| iOS No HCE | iPhones can't use NFC tap | ✅ QR fallback documented |
-| NPM Vulnerabilities (mostly dev-only) | Low prod risk | ✅ Triaged, documented |
-| `@sentry/node` vulnerable dependency | Moderate | ⚠️ Deferred, tracked |
-| CBK License Required | Legal for production | ⚠️ 3-6 month application, START NOW |
-| **Missing launcher icons** | **App won't package** | 🔴 **Confirmed — fix immediately** |
-| Gradle Wrapper | Was missing, blocked CLI builds | ✅ FIXED — now committed |
-| Terminal tools unreliable on some XML files | False bug reports possible | ⚠️ Always verify via VS Code before trusting empty grep/cat output |
-
----
-
-## 🔗 ESSENTIAL URLS & PATHS
-
-| Resource | Location |
-|----------|----------|
-| Your Fork | https://github.com/MARKDISPLAYNONE/OrchestratePay_Platform |
-| Upstream | https://github.com/gabrielngige/OrchestratePay_Platform |
-| Local Path | `~/Desktop/projects/colab project/OrchestratePay_Platform/` |
-| Backend API | http://localhost:3000 |
-| Web Frontend | http://localhost:3001 |
-| Android Project | `Tap2Pay/android/` |
-| Commit Count | Run `git log --oneline \| wc -l` for current exact count |
-
----
-
-## 📝 DECISION LOG
-
-| Date | Decision | Impact |
-|------|----------|--------|
-| 2026-07-23 | APDU mismatch identified & fixed | Core functionality restored |
-| 2026-07-27 | SDK 35 update | Build compatibility fixed |
-| 2026-07-28 | Root-caused 150+ compile errors to 4 actual bugs | Avoided blind mass-editing |
-| 2026-07-28 | Generated & committed Gradle wrapper | Unblocked terminal/CI builds permanently |
-| 2026-07-29 | Ran full `assembleDebug` before hardware testing | Caught 1 confirmed real bug (icons) early |
-| 2026-07-29 | Initially suspected 2nd bug (HCE manifest), later disproven | Learned to distrust empty grep output without GUI verification |
-| 2026-07-29 | NPM audit triaged | Confirmed low prod risk, one item deferred with rationale |
-| 2026-07-29 | Renamed handover doc (removed date from filename) | Consistent with team convention — dates tracked inside file, not filename |
-
----
-
-## 🎓 NEW DEV CHECKLIST
-
-**Before You Start:**
-- [ ] Read this document completely
-- [ ] Fix Bug #1 (missing launcher icons in `:app`)
-- [ ] Run `./gradlew :app:assembleDebug :consumer-wallet:assembleDebug` and confirm both succeed with real APK output
-- [ ] Verify backend running on :3000
-
-**When You Have 2nd Phone:**
-- [ ] Execute NFC test protocol (`ANDROID_NFC_TESTING_PROTOCOL.md`)
-- [ ] Update documentation with results
-
-**Debugging Tip:** If a `grep`/`cat`/`sed` command on a manifest or XML file returns suspiciously empty output with no error, don't trust it as proof the content is missing — open the file in VS Code to verify before concluding a bug exists.
-
----
-END OF ONBOARDING GUIDE
-```
+./gradlew test
+(Per README.md, this covers PaymentOrchestratorTest, ApduHandshakeTest, NfcSignatureVerifierTest, ConsumerHceTokenHandlerTest, etc. — dozens of tests already exist covering exactly the logic we can't hardware-test yet.)
+Pending (Awaiting 2nd NFC Phone) — CONFIRMED NOT YET AVAILABLE
+Execute ANDROID_NFC_TESTING_PROTOCOL.md in full once hardware arrives
+Deferred / Parallel Track (Not Blocking Code Work)
+CBK PSP license application — 3-6 month lead time, should start now regardless of code state
+@sentry/node upgrade (8.x→10.x, breaking) — deferred until after NFC hardware testing
+JWT_SECRET rotation — at deploy time only
+K8s P0 fixes (DARAJA_CALLBACK_URL rename, missing ADMIN_SECRET/NFC_SIGNING_SECRET in secrets template) — should be scheduled soon, independent of Android work
+Confirm real production stack (Next.js/Prisma/Zod vs. actual Vite/pg/Joi) with product owner
+Rename OrchestaApiClient.kt filename to match its actual class name OrchestrateApiClient — cosmetic, low priority, would need careful git history handling (rename, not delete+recreate)
+📝 DECISION LOG (New Entries)
+Date	Decision	Impact
+2026-08-12	Confirmed all 5 Bug #5 clusters fixed via genuine BUILD SUCCESSFUL	First fully green :app build in project history
+2026-08-12	Held all commits until full build verification complete	No premature/broken commits
+2026-08-12	Identified gradle.properties additions as load-bearing for Bug #4, not incidental	Prevents future dev from "cleaning up" and breaking KSP again
+2026-08-12	Deferred OrchestaApiClient.kt filename fix as cosmetic-only	Avoided scope creep — file rename isn't blocking, not worth git history disruption today
