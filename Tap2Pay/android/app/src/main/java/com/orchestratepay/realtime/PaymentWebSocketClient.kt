@@ -22,7 +22,7 @@ import kotlin.coroutines.resume
  * vs. up to 37.5s with polling.
  *
  * PROTOCOL (raw WebSocket, no Socket.io overhead):
- *   Connect: wss://api.orchestratepay.co.ke/ws?txnId=<uuid>&token=<jwt>
+ *   Connect: wss://api.orchestratepay.co.ke/ws?txnId=<txnId>&token=<jwt>
  *   Receive: { "status": "CONFIRMED"|"DECLINED"|"EXPIRED", "txnId": "...", ... }
  *   Server closes the connection after sending the result.
  *
@@ -35,33 +35,32 @@ import kotlin.coroutines.resume
  */
 class PaymentWebSocketClient(
     private val okHttpClient: OkHttpClient,
-    private val wsBaseUrl: String   // e.g. "ws://10.0.2.2:3000" or "wss://api.orchestratepay.co.ke"
+    private val wsBaseUrl: String // e.g. "ws://10.0.2.2:3000" or "wss://api.orchestratepay.co.ke"
 ) {
 
     /**
      * Suspends until the server pushes a payment status update, or until timeout.
      *
-     * @param txnId    Transaction ID to subscribe to
-     * @param token    Merchant JWT for authentication
+     * @param txnId Transaction ID to subscribe to
+     * @param token Merchant JWT for authentication
      * @param timeoutMs How long to wait before giving up (default 60s)
-     * @return         WsPaymentResult — Received, Timeout, or ConnectError
+     * @return WsPaymentResult — Received, Timeout, or ConnectError
      */
     suspend fun awaitPaymentStatus(
         txnId: String,
         token: String,
         timeoutMs: Long = 60_000L
     ): WsPaymentResult = withContext(Dispatchers.IO) {
-        withTimeoutOrNull(timeoutMs) {
-            suspendCancellableCoroutine { cont ->
+        withTimeoutOrNull<WsPaymentResult>(timeoutMs) {
+            suspendCancellableCoroutine<WsPaymentResult> { cont ->
                 val encodedToken = URLEncoder.encode(token, "UTF-8")
                 val url = "$wsBaseUrl/ws?txnId=$txnId&token=$encodedToken"
                 val request = Request.Builder().url(url).build()
 
                 val ws = okHttpClient.newWebSocket(request, object : WebSocketListener() {
-
                     override fun onMessage(webSocket: WebSocket, text: String) {
                         val json = runCatching { JSONObject(text) }.getOrNull()
-                            ?: return  // malformed JSON — wait for next message
+                            ?: return // malformed JSON — wait for next message
                         webSocket.close(1000, "received")
                         if (cont.isActive) cont.resume(WsPaymentResult.Received(json))
                     }
@@ -93,7 +92,7 @@ class PaymentWebSocketClient(
  * Result of a WebSocket payment status wait.
  *
  * - Received: the server sent a payment status update; parse the JSON payload
- * - Timeout:  60 seconds elapsed with no update; backend reconciliation will resolve
+ * - Timeout: 60 seconds elapsed with no update; backend reconciliation will resolve
  * - ConnectError: WebSocket connection failed; caller should fall back to polling
  */
 sealed class WsPaymentResult {

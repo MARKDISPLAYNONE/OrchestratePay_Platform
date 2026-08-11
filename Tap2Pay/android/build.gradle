@@ -4,6 +4,11 @@
 buildscript {
     ext {
         kotlin_version = '2.2.10'
+        // NOTE: KSP version must match the Kotlin version above using the pattern
+        // <kotlinVersion>-<kspRelease>. If Gradle fails to resolve this exact
+        // string below, check https://github.com/google/ksp/releases for the
+        // correct suffix for kotlin_version 2.2.10 and update ksp_version only.
+        ksp_version = '2.2.10-2.0.2'
     }
     repositories {
         mavenCentral()
@@ -14,6 +19,7 @@ buildscript {
         classpath 'com.android.tools.build:gradle:9.2.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath 'com.google.gms:google-services:4.5.0'
+        classpath "com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:$ksp_version"
     }
 }
 

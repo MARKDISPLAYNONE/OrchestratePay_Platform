@@ -2,7 +2,7 @@ package com.orchestratepay.nfc
 
 import android.app.PendingIntent
 import android.content.Intent
-import android.nfc.NdefFormatable
+import android.nfc.tech.NdefFormatable
 import android.nfc.NdefMessage
 import android.nfc.NdefRecord
 import android.nfc.NfcAdapter
@@ -13,7 +13,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.orchestratepay.api.OrchestaApiClient
+import com.orchestratepay.api.OrchestrateApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -101,7 +101,7 @@ class TagWriterActivity : AppCompatActivity() {
             try {
                 // Fetch the signed URI from the backend — never build it locally
                 // Backend calls buildSignedUri(merchantId, tagId) → "orchestratepay://pay?...&sign=<16hex>"
-                val uriString = OrchestaApiClient.current.getSignedTagUri(merchantId, tagId)
+                val uriString = OrchestrateApiClient.current.getSignedTagUri(merchantId, tagId)
                     ?: run {
                         withContext(Dispatchers.Main) { showError("Could not fetch signed URI from backend") }
                         return@launch

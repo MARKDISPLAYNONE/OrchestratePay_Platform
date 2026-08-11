@@ -1,3 +1,6 @@
 
 # Build outputs (all modules)
 **/build/
+build_log.txt
+*.bak
+*.hprof

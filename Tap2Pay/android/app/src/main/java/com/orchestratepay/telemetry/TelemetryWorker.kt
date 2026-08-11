@@ -3,7 +3,7 @@ package com.orchestratepay.telemetry
 import android.content.Context
 import android.util.Log
 import androidx.work.*
-import com.orchestratepay.api.OrchestaApiClient
+import com.orchestratepay.api.OrchestrateApiClient
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "TelemetryWorker"
@@ -25,7 +25,7 @@ class TelemetryWorker(
     override suspend fun doWork(): Result {
         val telemetry = DeviceTelemetryCollector(applicationContext).collect()
         return try {
-            val response = OrchestaApiClient.current.sendTelemetry(telemetry)
+            val response = OrchestrateApiClient.current.sendTelemetry(telemetry)
             if (response.isSuccessful) {
                 // Persist remote config for next app resume
                 response.body()?.config?.let { config ->
