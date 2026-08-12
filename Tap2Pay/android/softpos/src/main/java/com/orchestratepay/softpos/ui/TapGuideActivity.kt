@@ -79,24 +79,34 @@ class TapGuideActivity : AppCompatActivity() {
     private fun startPulseAnimation() {
         val outerSet = AnimatorSet().apply {
             playTogether(
-                ObjectAnimator.ofFloat(binding.ringOuter, "scaleX", 1f, 1.4f),
-                ObjectAnimator.ofFloat(binding.ringOuter, "scaleY", 1f, 1.4f),
-                ObjectAnimator.ofFloat(binding.ringOuter, "alpha",  0.5f, 0f),
+                ObjectAnimator.ofFloat(binding.ringOuter, "scaleX", 1f, 1.4f).apply {
+                    repeatCount = ObjectAnimator.INFINITE
+                },
+                ObjectAnimator.ofFloat(binding.ringOuter, "scaleY", 1f, 1.4f).apply {
+                    repeatCount = ObjectAnimator.INFINITE
+                },
+                ObjectAnimator.ofFloat(binding.ringOuter, "alpha", 0.5f, 0f).apply {
+                    repeatCount = ObjectAnimator.INFINITE
+                },
             )
-            duration     = 1200
-            repeatCount  = ObjectAnimator.INFINITE
+            duration = 1200
             interpolator = AccelerateDecelerateInterpolator()
         }
 
         val innerSet = AnimatorSet().apply {
             playTogether(
-                ObjectAnimator.ofFloat(binding.ringInner, "scaleX", 1f, 1.2f, 1f),
-                ObjectAnimator.ofFloat(binding.ringInner, "scaleY", 1f, 1.2f, 1f),
-                ObjectAnimator.ofFloat(binding.ringInner, "alpha",  0.7f, 0.3f, 0.7f),
+                ObjectAnimator.ofFloat(binding.ringInner, "scaleX", 1f, 1.2f, 1f).apply {
+                    repeatCount = ObjectAnimator.INFINITE
+                },
+                ObjectAnimator.ofFloat(binding.ringInner, "scaleY", 1f, 1.2f, 1f).apply {
+                    repeatCount = ObjectAnimator.INFINITE
+                },
+                ObjectAnimator.ofFloat(binding.ringInner, "alpha", 0.7f, 0.3f, 0.7f).apply {
+                    repeatCount = ObjectAnimator.INFINITE
+                },
             )
-            duration     = 1200
-            startDelay   = 300
-            repeatCount  = ObjectAnimator.INFINITE
+            duration = 1200
+            startDelay = 300
             interpolator = AccelerateDecelerateInterpolator()
         }
 
