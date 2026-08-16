@@ -13,7 +13,7 @@ import retrofit2.http.*
 data class AuthResponse(
     val token:      String,
     val consumerId: String,
-    val phone:      String,
+    val phone:      String?,
     @SerializedName("displayName") val displayName: String?,
     val expiresAt:  Long
 )

@@ -40,7 +40,7 @@ object ConsumerSessionManager {
     fun saveSession(
         token:       String,
         consumerId:  String,
-        phone:       String,
+        phone:       String?,
         displayName: String?,
         expiresAt:   Long
     ) {

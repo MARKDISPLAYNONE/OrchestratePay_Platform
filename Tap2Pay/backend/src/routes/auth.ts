@@ -377,7 +377,7 @@ router.post('/consumer/register', async (req: Request, res: Response) => {
 
     res.status(201).json({
       token, refreshToken, role: 'CONSUMER',
-      consumerId: consumer.id, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
+      consumerId: consumer.id, phone: consumer.phone, displayName: consumer.display_name, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
     })
 
   } catch (err: unknown) {
@@ -429,7 +429,7 @@ router.post('/consumer/login', async (req: Request, res: Response) => {
 
     res.json({
       token, refreshToken, role: 'CONSUMER',
-      consumerId: consumer.id, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
+      consumerId: consumer.id, phone: consumer.phone, displayName: consumer.display_name, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
     })
 
   } catch (err: unknown) {
@@ -516,7 +516,7 @@ router.post('/google', async (req: Request, res: Response) => {
       logger.info('Consumer signed in via Google', { consumerId: consumer.id })
       return res.json({
         token, refreshToken, role: 'CONSUMER',
-        consumerId: consumer.id, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
+        consumerId: consumer.id, phone: consumer.phone, displayName: consumer.display_name, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
       })
     }
 
@@ -547,7 +547,7 @@ router.post('/google', async (req: Request, res: Response) => {
     logger.info('Consumer registered via Google', { consumerId: consumer.id })
     return res.status(201).json({
       token, refreshToken, role: 'CONSUMER',
-      consumerId: consumer.id, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
+      consumerId: consumer.id, phone: consumer.phone, displayName: consumer.display_name, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
     })
 
   } catch (err: unknown) {
@@ -658,7 +658,7 @@ router.post('/consumer/otp/verify', async (req: Request, res: Response) => {
 
     res.json({
       token, refreshToken, role: 'CONSUMER',
-      consumerId: consumer.id, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
+      consumerId: consumer.id, phone: consumer.phone, displayName: consumer.display_name, expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
     })
 
   } catch (err: unknown) {
@@ -705,7 +705,9 @@ router.post('/consumer/refresh', async (req: Request, res: Response) => {
 
     res.json({
       token: newAccessToken, refreshToken: newRefreshToken,
-      role: 'CONSUMER', consumerId: consumer_id,
+      role: 'CONSUMER', consumerId: consumer.id,
+      phone: consumer.phone,
+      displayName: consumer.display_name,
       expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
     })
 
