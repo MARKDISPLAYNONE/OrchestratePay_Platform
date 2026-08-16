@@ -21,8 +21,8 @@ android {
 
     buildTypes {
         getByName("debug") {
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000\"")
-            buildConfigField("String", "WS_BASE_URL",  "\"ws://10.0.2.2:3000\"")
+            buildConfigField("String", "API_BASE_URL", "\"http://localhost:3000\"")
+            buildConfigField("String", "WS_BASE_URL",  "\"ws://localhost:3000\"")
         }
         getByName("release") {
             isMinifyEnabled = true
