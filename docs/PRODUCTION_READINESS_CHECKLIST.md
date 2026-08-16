@@ -1,8 +1,19 @@
 # PRODUCTION READINESS CHECKLIST
-
 **Project:** OrchestratePay Platform
-**Last Updated:** 12 August 2026
-**Status:** 🟢 PHASE 0 FULLY CLOSED — All 4 Android modules build green, all fixes committed, working tree clean — 🟢 2ND NFC PHONE NOW AVAILABLE — Phase 1 Hardware Validation UNBLOCKED, starting now
+**Last Updated:** 16 August 2026
+**Status:** 🟡 PHASE 1 IN PROGRESS (PARTIAL) — Consumer Wallet confirmed working end-to-end on ONE real device. Merchant Terminal NOT yet tested. Second physical phone NOT yet confirmed by `adb devices`. 5 UNCOMMITTED FILES currently in working tree — must be committed before any further work continues, to avoid losing real, verified fixes.
+
+---
+
+## ⚠️ CORRECTION TO PRIOR VERSION OF THIS DOCUMENT
+
+The 12 August version of this checklist stated: *"2ND NFC PHONE NOW AVAILABLE — Phase 1 Hardware Validation UNBLOCKED, starting now"* and *"working tree fully clean."*
+
+**Both claims are now known to be false as of this session:**
+- The last confirmed `adb devices` output showed exactly **one** device (`RF8R42CY49R`). No second device has been confirmed connected via ADB at any point in the logs reviewed.
+- The working tree currently has **5 modified, uncommitted files** — real bug fixes, not yet committed.
+
+**Standing lesson reaffirmed (again):** status claims in these docs must be backed by pasted command output, not narrative. Every previous "fully closed" declaration in this project's history has eventually been contradicted by a wider-scope check. Treat every ✅ in this document as "true as of the last command output we actually saw," not as permanent fact.
 
 ---
 
@@ -14,7 +25,29 @@
 
 ---
 
-## ✅ COMPLETED (Code Fixes & Build)
+## 🚨 URGENT — DO THIS BEFORE ANYTHING ELSE
+
+| # | Item | Why It's Urgent |
+|---|------|------------------|
+| 35 | **Commit the 5 uncommitted files** | Real, verified fixes (see items #36–39 below) currently exist only on disk. Any accidental `git checkout`, machine restart mid-work, or careless `git stash` could destroy hours of debugging. This is the single highest-priority action right now — higher than continuing hardware testing. |
+
+Files pending commit:
+modified: app/build.gradle (10.0.2.2 → localhost)
+modified: consumer-wallet/build.gradle.kts (10.0.2.2 → localhost)
+modified: consumer-wallet/.../ConsumerApiClient.kt (phone: String → String?)
+modified: consumer-wallet/.../ConsumerSessionManager.kt (phone: String → String?)
+modified: ../backend/src/routes/auth.ts (added phone + displayName to responses)
+
+text
+
+
+**Recommendation:** commit as 2–3 atomic commits, not one blob — the Android network config change (build.gradle files) is a distinct concern from the backend/Android response-contract fix (auth.ts + ConsumerApiClient.kt + ConsumerSessionManager.kt). Suggested split:
+1. `fix(android): point debug builds at localhost instead of emulator-only 10.0.2.2`
+2. `fix(auth): include phone and displayName in consumer login/register responses; make Android AuthResponse.phone nullable as defense-in-depth`
+
+---
+
+## ✅ COMPLETED (Code Fixes & Build) — Prior Session (12 August, verified via build logs)
 
 | # | Item | File | Change | Commit | Status |
 |---|------|------|--------|--------|--------|
@@ -26,232 +59,128 @@
 | 6 | **Missing Layout** | `activity_consumer_tag_writer.xml` | Created | `3525e52` | ✅ FIXED |
 | 7 | **Consumer Wallet Build (4 root causes)** | Various | Fixed all 4 blockers | `fd21ba5` | ✅ FIXED |
 | 8 | **Gradle Wrapper** | `gradlew`, `gradlew.bat`, `gradle-wrapper.jar` | Generated & committed | `fd21ba5` | ✅ FIXED |
-| 9 | **HCE Manifest — false alarm retracted** | `AndroidManifest.xml` (consumer-wallet) | No code change — verified already correct | `4d77878` | ✅ CONFIRMED NOT A BUG |
-| 10 | **Missing `colors.xml` in `:app`** | `app/src/main/res/values/colors.xml` | Created, `white` color added, verified `BUILD SUCCESSFUL` | `e9866d0` | ✅ FIXED |
-| 11 | **Launcher icons untracked in git (`:app`)** | mipmap dirs | Committed | `e9866d0` | ✅ FIXED |
-| 12 | **`backend/package-lock.json` review** | `package-lock.json` | Full diff reviewed — patch/minor transitive bumps only, no Sentry/OTel creep confirmed absent | `b5317a5` | ✅ FIXED |
-| 31 | **nfc-core missing `consumer-rules.pro`** | `nfc-core/build.gradle.kts`, `consumer-rules.pro` | Created placeholder file | `6e33592` | ✅ FIXED |
-| 32 | **softpos missing launcher icons** | `softpos/src/main/res/mipmap-*/`, `drawable/*` | Reused `:app` icon set | `35ec698` | ✅ FIXED |
-| 33 | **softpos `AnimatorSet.repeatCount` misuse** | `TapGuideActivity.kt` | Moved `repeatCount` to child `ObjectAnimator`s | `35ec698` | ✅ FIXED |
+| 9 | **HCE Manifest — false alarm retracted** | `AndroidManifest.xml` | No code change | `4d77878` | ✅ CONFIRMED NOT A BUG |
+| 10 | **Missing `colors.xml` in `:app`** | `app/src/main/res/values/colors.xml` | Created | `e9866d0` | ✅ FIXED |
+| 11 | **Launcher icons untracked (`:app`)** | mipmap dirs | Committed | `e9866d0` | ✅ FIXED |
+| 12 | **`backend/package-lock.json` review** | `package-lock.json` | Reviewed, safe | `b5317a5` | ✅ FIXED |
+| 31 | **nfc-core missing `consumer-rules.pro`** | `nfc-core/build.gradle.kts` | Created placeholder | `6e33592` | ✅ FIXED |
+| 32 | **softpos missing launcher icons** | `softpos/src/main/res/*` | Reused `:app` icon set | `35ec698` | ✅ FIXED |
+| 33 | **softpos `AnimatorSet.repeatCount` misuse** | `TapGuideActivity.kt` | Moved to child `ObjectAnimator`s | `35ec698` | ✅ FIXED |
 
-**Total: 50 commits, 28 ahead of upstream** (confirmed via `git log --oneline | wc -l`, 12 August 2026 — always re-verify before writing this number in future updates, it changes every commit).
-
-**Full 4-module `assembleDebug` verified TWICE:** pre-commit (153 tasks, 149 executed, `BUILD SUCCESSFUL` in 47s) and post-commit (153 tasks, 149 executed, 4 up-to-date, `BUILD SUCCESSFUL` in 49s). Zero regressions from the commit process.
+**Note on commit count:** the previously-cited "50 commits, 28 ahead" figure is now **stale** — it predates the 5 currently-uncommitted files from this session. **Do not cite a commit count in any future doc without running `git log --oneline | wc -l` fresh in that same session.**
 
 ---
 
-## ✅ RESOLVED FINDINGS LOG (For Audit Trail)
+## ✅ NEW FINDINGS — THIS SESSION (16 August) — Real Bugs, Found and Fixed on Real Hardware
 
-### Finding: Missing Launcher Icons (`:app` module) — 29 July 2026 — ✅ RESOLVED
-Confirmed via real `BUILD FAILED` AAPT error. Fixed and committed `e9866d0`.
+These are qualitatively different from the Phase 0 bugs above: those were caught by `assembleDebug`. These were only reachable by **actually running the app on a physical device and attempting a real login** — proof that build-green ≠ runtime-correct, and a strong argument for why hardware testing was never optional.
 
-### Finding: Missing `colors.xml` (`:app` module) — 8 August 2026 — ✅ RESOLVED
-Confirmed via real `BUILD FAILED` AAPT resource-linking error: `resource color/white not found`. Investigation method: full `grep -rho '@color/[a-zA-Z0-9_]*' app/src/main/res/layout/ | sort -u` scan before fixing — confirmed one-pass fix, not iterative. Committed `e9866d0`.
+| # | Item | File(s) | Root Cause | Fix | Status |
+|---|------|---------|------------|-----|--------|
+| 36 | **Test consumer account never existed in DB** | N/A (data, not code) | `consumer2@test.com` was referenced throughout every testing doc but never actually seeded into `consumers` table. Only pre-existing rows: one with `email: null`, one with `consumer@example.com`. | Created via real `POST /api/v1/auth/consumer/register` — went through actual bcrypt hashing, SHA-256 phone hashing, UUID gen, audit log. Consumer ID `a09df433-e945-40ad-9177-54ec6ac94300`. | ✅ FIXED — verified via `curl` login success |
+| 37 | **Debug build hardcoded emulator-only IP (`10.0.2.2`)** | `app/build.gradle:32`, `consumer-wallet/build.gradle.kts:24` | Both modules' debug `API_BASE_URL` pointed at the Android-emulator-only loopback alias. Real physical devices cannot resolve `10.0.2.2` to the host machine. | Changed to `localhost`, paired with `adb reverse tcp:3000 tcp:3000` to forward the phone's `localhost:3000` to the dev machine over USB. `localhost` was already permitted in `network_security_config.xml`. | ✅ FIXED (uncommitted — see item #35) |
+| 38 | **`adb reverse` binding does not survive ADB daemon restart** | N/A (environment/process, not code) | Any daemon restart (e.g. `* daemon not running; starting now`) silently drops the port forward, causing "Failed to connect" errors that look identical to a fresh config problem. | No code fix — **process/runbook fix**: re-run `adb -s <serial> reverse tcp:3000 tcp:3000` after any daemon restart, verify with `adb reverse --list` before assuming connectivity is broken again. | ✅ DOCUMENTED — added to runbook below |
+| 39 | **Backend/Android auth response contract mismatch → NullPointerException on login** | `backend/src/routes/auth.ts`, `ConsumerApiClient.kt`, `ConsumerSessionManager.kt` | Backend's `POST /api/v1/auth/consumer/login` queried `phone` and `display_name` from the DB (confirmed at query level, line 413) but **never included them in the JSON response body**. Android's `AuthResponse` data class declared `phone: String` as **non-nullable**. Gson deserialized the missing field as `null`, Kotlin's null-safety threw at runtime: `NullPointerException: Parameter specified as non-null is null: method ConsumerSessionManager.saveSession, parameter phone`. | Two-sided fix: (1) backend now includes `phone` + `displayName` in all consumer login/registration/Google-auth responses (5 call sites: lines 380, 432, 519, 550, 661); (2) Android `AuthResponse.phone` and `ConsumerSessionManager.saveSession(phone: ...)` both changed to nullable `String?` as defense-in-depth against any other auth path with the same gap. | ✅ FIXED (uncommitted — see item #35) — **verified working: Consumer Wallet dashboard now renders correctly with "Test Consumer 2", loyalty points, quick actions** |
+| 40 | **Sentry Android SDK crashes on missing DSN** | N/A — Sentry auto-init via ContentProvider | `IllegalArgumentException: DSN is required. Use empty string or set enabled to false in SentryOptions to disable SDK.` Debug builds have no DSN configured, but Sentry's default auto-init doesn't tolerate that gracefully. | **Not yet fixed.** App recovered and continued past this crash in the observed run, so it is not currently blocking, but this is fragile — a future Android/Sentry SDK version could make this fatal instead of recoverable. | ⚠️ DEFERRED — track before production. Recommended fix: explicitly disable Sentry for debug builds (`enabled = false` in `SentryOptions`) rather than relying on auto-init tolerating a missing DSN. |
 
-### False Alarm: HCE Service Not Registered — Retracted 8 August 2026
-Original claim based on narrow `grep -c` returning `0`. Manual verification confirmed manifest correctly wired. Committed retraction `4d77878`. **Lesson applied throughout:** trust only real compiler errors, never a single narrow grep, as ground truth for "missing" resources.
+**New standing lesson from this session:** a schema/contract mismatch between backend response shape and Android's expected data class (item #39) is a **class of bug that `assembleDebug` and Kotlin compilation can never catch**, because both sides compile fine independently — it only manifests at runtime against a real backend response. This strongly suggests **an API contract audit is worth doing across all auth/session endpoints**, not just the one that happened to crash first. Recommend adding this as a new backlog item (see #41 below).
 
-### Finding: nfc-core missing `consumer-rules.pro` — 12 August 2026 — ✅ RESOLVED
-Surfaced by first-ever full 4-module `assembleDebug` run. Scope-checked (`grep -rn "consumerProguardFiles"`) to confirm isolated to `nfc-core`. Fixed and committed `6e33592`.
-
-### Finding: softpos missing launcher icons + AnimatorSet.repeatCount misuse — 12 August 2026 — ✅ RESOLVED
-Also surfaced by the same full build run — `:softpos` had never been included in a build wide enough to reach it before. Both sub-bugs fixed and committed together in `35ec698`. Full details in `SESSION_HANDOVER.md`.
-
-**Standing lesson (reaffirmed twice more this session):** A full `assembleDebug` across the entire module graph is the only reliable way to surface these classes of packaging/API-misuse bugs. Confirmed again when Bug #6 and Bug #7 were found in modules that had individually "compiled" via Kotlin-only checks but had never been packaged end-to-end.
+| # | Item | Severity | Action |
+|---|------|----------|--------|
+| 41 | **Full auth/session API contract audit** | 🟡 MEDIUM | Systematically diff every backend response shape against its corresponding Android/web data class for all auth-adjacent endpoints (merchant login, Google auth, refresh token, etc.) — item #39 was found by accident via a crash; there is no guarantee it's the only instance of this pattern. |
 
 ---
 
-## ✅ COMPLETED (Infrastructure & Verification)
+## ✅ COMPLETED (Infrastructure & Verification) — Updated
 
 | Component | Status | URL | Verification |
 |-----------|--------|-----|---------------|
 | PostgreSQL 18 | ✅ | localhost:5432 | 4 migrations applied |
-| Redis 5.0.14.1 | ✅ | localhost:6379 | PONG verified |
-| Backend API | ✅ | :3000 | Health check OK, login working |
-| Web Frontend | ✅ | :3001 | Merchant/Consumer portals accessible |
-| K8s Manifests | ✅ | infra/k8s/ | `DARAJA_CALLBACK_BASE_URL` & secrets verified |
-| Test Accounts | ✅ | - | Merchant & Consumer created |
-| Android Kotlin Compile (all 4 modules) | ✅ | `app`, `consumer-wallet`, `nfc-core`, `softpos` | All compile clean |
-| Android APK Packaging — ALL 4 MODULES | ✅ | — | `./gradlew clean assembleDebug` verified TWICE, both `BUILD SUCCESSFUL` |
-| HCE Manifest Wiring (`consumer-wallet`) | ✅ | `AndroidManifest.xml`, `apduservice.xml` | Verified correct, false alarm retracted |
-| JAVA_HOME environment | ✅ | Local dev machine | Persisted via `.bashrc` |
-| Git working tree | ✅ | — | Confirmed clean via `git status`, all fixes committed |
-| **2nd NFC-enabled phone** | ✅ | — | **Now available as of this session — Phase 1 unblocked** |
+| Redis | ✅ | localhost:6379 | Started manually this session via full path (`/c/Users/admin/redis/redis-server.exe --port 6379`), `PING → PONG` confirmed. **Not on PATH — must be started manually each session until added to `.bashrc` or a startup script.** |
+| Backend API | ✅ | :3000 | Started manually this session (`npm run dev`), confirmed via log line `"OrchestratePay backend running on port 3000"` |
+| Web Frontend | ⚠️ UNVERIFIED THIS SESSION | :3001 | Not touched this session — carried over from prior doc, not re-confirmed. Do not assume still running. |
+| Test Accounts | 🟡 PARTIAL | - | `consumer2@test.com` — ✅ now real, created and login-verified. `merchant@test.com` — exists, APPROVED, but **login not yet attempted this session** (next immediate step). |
+| Android Kotlin Compile (all 4 modules) | ✅ (as of 12 Aug) | `app`, `consumer-wallet`, `nfc-core`, `softpos` | Not re-verified this session — recommend re-running before next commit given 5 files changed |
+| Android APK Packaging | 🟡 PARTIAL | — | Consumer Wallet: rebuilt, reinstalled, confirmed working on real device this session. `:app` (Merchant Terminal): not yet reinstalled/retested with the `localhost` fix. |
+| **2nd NFC-enabled phone** | ⚠️ **NOT CONFIRMED** | — | **Correction from prior doc: no `adb devices` output in this session or the prior one has ever shown two devices simultaneously. Treat as unavailable until proven otherwise with pasted output.** |
+| Consumer Wallet — real device, real login, real dashboard | ✅ | — | **First genuine end-to-end mobile success this project has had.** Login → JWT issued → session saved → dashboard rendered with real data. |
+| Merchant Terminal — real device | ⚠️ NOT YET TESTED | — | Immediate next step |
+| Git working tree | 🔴 **NOT CLEAN** | — | 5 uncommitted files — see URGENT section above |
 
 ---
 
-## 🟢 IN PROGRESS — HARDWARE VALIDATION (Phase 1 — NOW ACTIVE)
+## 🟡 PHASE 1 — HARDWARE VALIDATION (Corrected Status: PARTIAL, NOT "ACTIVE")
 
 | # | Item | Status | Blocker | Success Criteria |
 |---|------|--------|---------|-------------------|
-| 13 | **Phone-to-Phone NFC (HCE)** | 🟢 READY TO TEST | None — code verified, hardware available | APDU exchange: SELECT→GET DATA→CONFIRM |
-| 14 | **NFC Tag Read** | 🟢 READY TO TEST | Needs NTAG215/216 sticker (confirm availability) | Tag signature verified, STK Push sent |
-| 15 | **P2P Transfer** | 🟢 READY TO TEST | None — same 2 phones | Token exchange, backend settlement |
-| 16 | **APDU Log Capture** | 🟢 READY TO CAPTURE | None | Logcat shows 0x80/0x81 instructions |
+| 13 | **Phone-to-Phone NFC (HCE)** | 🔴 **NOT READY** — was previously marked "READY TO TEST" in error | Requires: (a) 5 files committed, (b) Merchant Terminal login verified on at least one device, (c) a genuine second `adb`-confirmed device | APDU exchange: SELECT→GET DATA→CONFIRM |
+| 14 | **NFC Tag Read** | ⚠️ PENDING | Needs NTAG215/216 sticker — availability still unconfirmed | Tag signature verified, STK Push sent |
+| 15 | **P2P Transfer** | ⚠️ PENDING | Needs 2nd confirmed device | Token exchange, backend settlement |
+| 16 | **APDU Log Capture** | ⚠️ PENDING | Depends on #13 | Logcat shows 0x80/0x81 instructions |
 
-**Recommendation:** Junior dev can execute Test 1 (Phone-to-Phone HCE — the CRITICAL test) independently by following `ANDROID_NFC_TESTING_PROTOCOL.md` step by step — it is fully self-contained with expected outputs, logcat commands, and troubleshooting for every known failure mode. Escalate back only if:
-- APDU exchange fails in a way not covered in the Troubleshooting section
-- Any resource-linking / build error appears (that would be a NEW packaging bug, not an NFC bug — do not debug via hardware, flag immediately)
-- Success criteria for idempotency (Test 4c, server-side enforcement) cannot be confirmed just by observation — that specific check requires backend code review, see item #23 below
-
----
-
-## ⚠️ PENDING (Security Hardening - No Hardware Needed) — LOWER PRIORITY THAN LIVE NFC TEST RIGHT NOW
-
-| # | Item | Severity | Effort | Action | Risk if Delayed |
-|---|------|----------|--------|--------|-------------------|
-| 17 | **JWT Secret** | 🔴 CRITICAL (at deploy) | 5 min | `openssl rand -hex 64` → `.env` at deploy time | Token forgery possible |
-| 18 | **Database SSL** | 🔴 CRITICAL | 10 min | Add `sslmode=require` | MITM attacks |
-| 19 | **Rate Limiting** | 🟡 MEDIUM | 30 min | Add to `/merchant-hce-token` | DoS via token generation |
-| 20 | **P2P Timeout** | 🟢 LOW | 15 min | Add 5min TTL to `P2PHceSession` | Mode confusion |
-| 21 | **NPM Audit — Sentry upgrade (backend `@sentry/node`)** | 🟡 MEDIUM | 2-4 hrs | Upgrade `@sentry/node` 8.x→10.68.0 (breaking) | Vulnerable `@opentelemetry/core` chain. **Note: separate from Android-native Sentry SDK already bundled in `:app` — independent upgrade tracks, do not conflate.** |
-| 23 | **APDU sniffing threat model review** | 🟡 MEDIUM | 1 hr | Confirm 90s TTL acceptable; verify single-use enforced server-side, not just client-side | Replay attack within tap window — **directly relevant to Test 4c in the NFC protocol, should be reviewed alongside hardware testing, not after** |
-
-**Item #22 (package-lock.json review) — ✅ RESOLVED, moved to Completed table above (item #12).**
-
-**Note on sequencing:** Since NFC hardware is now available, items #17–20 and #21 are correctly deprioritized behind the live hardware test — they don't block Phase 1. **Item #23 is the exception** — it's directly tied to correctly interpreting Test 4c's result, so it should be reviewed in parallel with, not after, hardware testing.
+**Corrected sequencing — do this in order, do not skip ahead:**
+1. Commit the 5 pending files (#35)
+2. Test Merchant Terminal login on the **one confirmed device** (single-device sanity check — cheap, fast, catches any similar contract bugs in the merchant auth path before we're mid-hardware-test)
+3. Physically confirm a second device via `adb devices` showing two `device` entries simultaneously — paste the output, don't assume
+4. Only then proceed to Test 1 (Phone-to-Phone HCE)
 
 ---
 
-## ✅ COMPLETED (Infrastructure Verification)
+## ⚠️ PENDING (Security Hardening) — Unchanged, still deprioritized behind Phase 1 completion
 
-| # | Item | Severity | Status | Verification |
-|---|------|----------|--------|---------------|
-| 24 | **K8s Manifests** | 🔴 CRITICAL | ✅ VERIFIED | `infra/k8s/` exists with correct structure |
-| 25 | **DARAJA_CALLBACK_BASE_URL** | 🔴 CRITICAL | ✅ VERIFIED | Present in `backend/deployment.yaml` |
-| 26 | **ADMIN_SECRET** | 🔴 CRITICAL | ✅ VERIFIED | Present in both deployment and secrets template |
-| 27 | **NFC_SIGNING_SECRET** | 🔴 CRITICAL | ✅ VERIFIED | Present in both deployment and secrets template |
-
----
-
-## ⚠️ PENDING (Compliance) — LOWER PRIORITY THAN LIVE NFC TEST, BUT CALENDAR-DRIVEN
-
-| # | Item | Severity | Blocker | Timeline |
-|---|------|----------|---------|----------|
-| 28 | **CBK PSP License** | 🔴 CRITICAL | Application | 3-6 months — **START IN PARALLEL, does not compete with hardware testing time** |
-| 29 | **KRA eTIMS** | 🟡 MEDIUM | Prod cert | 2-4 weeks (code ready) |
-| 30 | **Data Protection (Kenya DPA 2019)** | 🟡 MEDIUM | Lawyer | Privacy policy needed |
+| # | Item | Severity | Effort | Action |
+|---|------|----------|--------|--------|
+| 17 | **JWT Secret** | 🔴 CRITICAL (at deploy) | 5 min | `openssl rand -hex 64` → `.env` at deploy time |
+| 18 | **Database SSL** | 🔴 CRITICAL | 10 min | Add `sslmode=require` |
+| 19 | **Rate Limiting** | 🟡 MEDIUM | 30 min | Add to `/merchant-hce-token` |
+| 20 | **P2P Timeout** | 🟢 LOW | 15 min | Add 5min TTL to `P2PHceSession` |
+| 21 | **`@sentry/node` upgrade (backend)** | 🟡 MEDIUM | 2-4 hrs | 8.x→10.68.0 — separate track from item #40 (Android Sentry DSN crash) |
+| 23 | **APDU sniffing / server-side idempotency review** | 🟡 MEDIUM | 1 hr | Still unreviewed — directly relevant to eventual Test 4c |
 
 ---
 
-## ⚠️ PENDING (Architecture Clarity)
+## ⚠️ PENDING (Architecture Clarity) — Unchanged
 
-| # | Item | Severity | Blocker | Action |
-|---|------|----------|---------|--------|
-| 34 | **Web stack contradiction unresolved** | 🟡 MEDIUM | Product owner input | `CLAUDE.md` states Next.js; earlier note claimed Vite 6 + React 19. Does not block NFC testing — resolve when time allows. |
-
----
-
-## 🗺️ FULL PRODUCTION READINESS ROADMAP
-
-### Phase 0: Close Out Current Bugs — ✅ FULLY CLOSED (12 August 2026)
-- [x] Verify colors.xml fix
-- [x] Review & commit `package-lock.json` diff (`b5317a5`)
-- [x] Commit icon files
-- [x] Re-run full 4-module `assembleDebug` twice, confirmed clean both times
-- [x] Commit softpos fix (`35ec698`)
-- [x] Sync all docs
-
-### Phase 1: Hardware Validation — 🟢 ACTIVE NOW (2nd phone available)
-**Blocker level:** 🔴 Critical — nothing else matters if taps don't work
-- [ ] Execute `ANDROID_NFC_TESTING_PROTOCOL.md` Phase 0 pre-flight check (Java, build, APK existence)
-- [ ] Build & install both APKs on the 2 phones
-- [ ] **TEST 1 — Phone-to-Phone HCE Payment (CRITICAL)** — this is the single most important test in the whole project right now
-- [ ] Test 2 — NFC Tag Read (if NTAG215 sticker available)
-- [ ] Test 3 — P2P Transfer
-- [ ] Test 4 — Error handling (expired token, invalid signature, double-tap idempotency)
-- [ ] Capture logcat + screenshots per protocol's Capture Requirements section
-- [ ] Update `ANDROID_NFC_TESTING_PROTOCOL.md` with PASS/FAIL results
-
-### Phase 2: Security Hardening
-**Blocker level:** 🔴 Critical for handling real money — but does not block Phase 1
-- Generate real `JWT_SECRET` at deploy time
-- Resolve `@sentry/node` (backend) vulnerability — post-NFC-testing
-- Confirm APDU 90s TTL + server-side single-use enforcement (item #23) — **do this alongside Test 4c, not after**
-- Rate limiting on STK Push endpoint
-
-### Phase 3: Compliance & Legal
-**Blocker level:** 🔴 Critical — illegal to operate without this — **start in parallel, today**
-- CBK license application — 3-6 month lead time
-- Kenya DPA 2019 compliance review
-- M-Pesa Daraja production credentials
-
-### Phase 4: Infrastructure Readiness
-- K8s P0 fixes (`DARAJA_CALLBACK_URL` rename, missing secrets)
-- Database backup/restore test
-- Redis persistence config
-- Move secrets out of `.env` for production
-
-### Phase 5: Resilience & Failure Modes
-- M-Pesa STK Push timeout handling
-- Orphaned transaction handling
-- Backend-level idempotency confirmation (ties directly to item #23 / Test 4c)
-
-### Phase 6: Observability
-- Structured logging per transaction stage
-- Alerting on failed payment rate spikes
-- Merchant success rate dashboard
-
-### Phase 7: Scale Testing
-- Load test under concurrent NFC taps
-- DB connection pool sizing
-
-### Phase 8: iOS Strategy Execution
-- QR fallback per `IOS_LIMITATIONS_AND_FALLBACK.md`
+| # | Item | Severity | Action |
+|---|------|----------|--------|
+| 34 | **Web stack contradiction unresolved** | 🟡 MEDIUM | Still not resolved with product owner. Does not block current work. |
 
 ---
 
-## 📊 RISK ASSESSMENT
+## ⚠️ PENDING (Compliance) — Unchanged, calendar-driven, start regardless
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| **Live NFC test fails on real hardware** | Medium | High | This is now the #1 active risk — code verified in isolation but never tap-tested. Everything else is secondary until this is resolved. |
-| CBK license delay | High | Critical | Start application immediately, in parallel with hardware testing |
-| Server-side idempotency gap (item #23 unverified) | Unknown | High (double-charge risk) | Review in parallel with Test 4c, don't treat as separate later task |
-| Sentry (backend) upgrade breaks logging | Medium | Medium | Deferred until after NFC testing |
-| iOS users excluded | Certain | Medium | QR fallback documented, not yet built |
-| Web stack decisions made against wrong assumed framework | Medium | Medium | Confirm with product owner, no urgency |
+| # | Item | Severity | Timeline |
+|---|------|----------|----------|
+| 28 | **CBK PSP License** | 🔴 CRITICAL | 3-6 months — should have been started already, start immediately, does not compete with any engineering time |
+| 29 | **KRA eTIMS** | 🟡 MEDIUM | 2-4 weeks |
+| 30 | **Data Protection (Kenya DPA 2019)** | 🟡 MEDIUM | Lawyer needed |
 
 ---
 
-## 🎯 IMMEDIATE NEXT ACTIONS
+## 🎯 IMMEDIATE NEXT ACTIONS (Corrected, in real priority order)
 
-**RIGHT NOW — Hardware Available, This Is The Critical Path:**
-1. 🔴 Run Phase 0 pre-flight check from `ANDROID_NFC_TESTING_PROTOCOL.md` (Java version, `assembleDebug` for both `:app` + `:consumer-wallet`, confirm real `.apk` files exist)
-2. 🔴 Install `consumer-wallet` APK on Phone A, `app` APK on Phone B
-3. 🔴 Execute **TEST 1 — Phone-to-Phone HCE Payment** — capture logcat with the exact filter from the protocol
-4. 🟡 While hardware test runs / between attempts: review `hce-token.ts` + transaction creation path for server-side single-use enforcement (item #23) — this directly informs whether Test 4c passing "for real" or just client-side
+1. 🔴 **Commit the 5 uncommitted files** as 2 atomic commits (see item #35 for split)
+2. 🔴 **Re-run `./gradlew clean assembleDebug`** for all 4 modules post-commit — the network config + nullable-type changes touched real code, this must be re-verified green before trusting anything built on top of it
+3. 🔴 **Test Merchant Terminal login** on the confirmed device (`merchant@test.com` / `TestPass123`) — cheapest possible next signal, do this before chasing a second phone
+4. 🔴 **Physically resolve second-device status** — plug it in, confirm Developer Options + USB debugging are on, run `adb devices`, confirm two `device` (not `unauthorized`) entries, paste output
+5. 🟡 Fix Sentry DSN crash properly (item #40) — low effort, prevents a currently-recoverable crash from becoming fatal on a future SDK bump
+6. 🟡 Begin item #41 (full auth contract audit) in parallel — doesn't block hardware testing
+7. ⚠️ CBK license application — should already be in motion, independent of all of the above
 
-**Delegable to junior dev (not critical-path blocking, can run in parallel):**
-5. ⚠️ Start CBK license application paperwork
-6. 🟡 Security hardening #17–20 (all mechanical, well-documented, low-ambiguity)
-7. 🟡 K8s P0 fixes
-
-**After Phase 1 passes:**
-8. Update `ANDROID_NFC_TESTING_PROTOCOL.md` with PASS status + date
-9. Confirm commit count fresh (`git log --oneline | wc -l`)
-10. Prepare PR to upstream per protocol's Post-Test Actions section
+**Not doing right now, and why:** items #17–21, #23, #28-30 remain correctly deprioritized behind getting an actual second confirmed device and a working Merchant Terminal login — that is still the true critical path, exactly as the 12 August doc argued, it just hadn't actually been reached yet.
 
 ---
 
-## DECISION LOG
+## 📝 DECISION LOG (New Entries)
 
 | Date | Decision | Impact |
 |------|----------|--------|
-| 2026-07-23 | APDU mismatch identified & fixed | Core functionality restored |
-| 2026-07-27 | SDK 35 update | Build compatibility fixed |
-| 2026-07-28 | Root-caused 150+ compile errors to 4 bugs (`fd21ba5`) | Avoided blind mass-editing |
-| 2026-07-28 | Generated & committed Gradle wrapper | Unblocked terminal/CI builds |
-| 2026-07-29 | Full `assembleDebug` run caught real icon bug | More rigorous than Kotlin-only compile |
-| 2026-07-29 | Suspected HCE manifest bug from empty grep output | Later disproven |
-| 2026-08-08 | Retracted HCE false alarm in commit `4d77878` | Permanent correction |
-| 2026-08-08 | Discovered icon fix files were untracked in git | New standing check: verify `git status` after any "it just works now" moment |
-| 2026-08-08 | Found and fixed missing `colors.xml` via full grep-first investigation | Avoided iterative one-color-at-a-time rebuild cycles |
-| 2026-08-08 | Flagged `package-lock.json` as needing diff review before commit | Prevented silently reintroducing deferred Sentry upgrade |
-| 2026-08-12 | First-ever full 4-module `assembleDebug` surfaced Bug #6 (nfc-core) and Bug #7 (softpos) | Neither a regression — both pre-existing, previously invisible |
-| 2026-08-12 | Committed all Phase 0 fixes atomically and separately | Clean, auditable commit history maintained |
-| 2026-08-12 | Re-ran full build post-commit to confirm zero regressions | Phase 0 formally closed with double-verified evidence |
-| 2026-08-12 | **2nd NFC phone became available — Phase 1 activated, deprioritized non-blocking security/compliance items behind live hardware test** | **Critical path shifted from "code readiness" to "does it actually tap-to-pay" — the core product hypothesis** |
+| 2026-08-16 | Corrected prior doc's false claims of "2nd phone available" and "working tree clean" | Restores trust in this document as ground truth; both claims are now shown to have been premature/incorrect |
+| 2026-08-16 | Created real `consumer2@test.com` account via actual registration endpoint rather than direct DB insert | Fix went through the full production code path (bcrypt, phone hashing, audit log) — more trustworthy than a raw SQL insert |
+| 2026-08-16 | Root-caused NPE to a genuine backend/Android response-contract mismatch, not a client-side bug | Fixed both sides; flagged as a new bug *class* not caught by existing build verification, opened item #41 (contract audit) as a direct consequence |
+| 2026-08-16 | Diagnosed `10.0.2.2` as emulator-only and switched debug builds to `localhost` + `adb reverse` | Real devices can now reach the local backend over USB; documented that this binding does not survive daemon restarts (item #38) |
+| 2026-08-16 | Deferred Sentry DSN crash fix (recoverable, not fatal) rather than fixing immediately | Correctly triaged as non-blocking for hardware testing, but tracked so it isn't forgotten before production |
+| 2026-08-16 | Explicitly did NOT advance Phase 1 status to "active" despite one device working end-to-end | One working device ≠ two working devices; refused to repeat the previous session's premature "unblocked" declaration |
 
 ---
 

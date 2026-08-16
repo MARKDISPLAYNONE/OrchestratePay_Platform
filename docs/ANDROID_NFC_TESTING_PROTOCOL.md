@@ -1,39 +1,56 @@
 # ANDROID NFC TESTING PROTOCOL
-
 **Project:** OrchestratePay Platform
-**Last Updated:** 8 August 2026
-**Status:** ⚠️ NOT YET READY FOR HARDWARE — Phase 0 build verification must pass first
-**Prerequisites:** 2x NFC-enabled Android phones (API 26+), Android Studio, Working Backend
+**Last Updated:** 16 August 2026
+**Status:** ⚠️ NOT YET READY FOR TWO-PHONE TESTS — single-device login path now proven working; second device still awaited; 5 files uncommitted must be committed before proceeding further
+**Prerequisites:** 2x NFC-enabled Android phones (API 26+) — **currently have 1 confirmed, 1 awaited**, Android Studio, Working Backend
 
 ---
 
-## ⚠️ DO NOT PROCEED TO HARDWARE UNTIL PHASE 0 IS GREEN
+## ⚠️ DO NOT PROCEED TO TWO-PHONE TESTS UNTIL ALL OF THE FOLLOWING ARE TRUE
 
-This protocol was previously marked "no code blockers remain" (28 July). That was **premature** — a full `assembleDebug` run on 8 August surfaced a real packaging bug (`colors.xml` missing) that had nothing to do with NFC logic but would have silently prevented `:app` from installing at all. This is exactly the failure mode this document warns about below — don't repeat the mistake of skipping the pre-flight check.
+This protocol has twice previously been marked "ready" prematurely (28 July, then again implicitly via the 12 August checklist's "Phase 1 ACTIVE" claim) only for a real blocker to surface later. Do not repeat that pattern. Before attempting Test 1:
+
+1. [ ] The 5 currently-uncommitted files are committed
+2. [ ] `./gradlew clean assembleDebug` re-verified green across all 4 modules, post-commit
+3. [ ] Merchant Terminal (`:app`) login verified working on the one confirmed device (not yet done — see below)
+4. [ ] `adb devices` shows **two** entries, both status `device` (not `unauthorized`), pasted as real output in this session
 
 ---
 
-## 📋 PHASE 0: MANDATORY PRE-FLIGHT CHECK — DO NOT SKIP
+## 📋 PHASE 0: MANDATORY PRE-FLIGHT CHECK — UPDATED THIS SESSION, DO NOT SKIP
 
-Run this before connecting any phone. All three checks must pass with real command output, not assumptions.
+Two new checks added this session, based on real failures encountered. All checks must pass with real command output, not assumptions.
 
 ```bash
 cd Tap2Pay/android
 
-# Check 1: Confirm JAVA_HOME is set (fresh terminals lose this without .bashrc persistence)
+# Check 1: Confirm JAVA_HOME is set
 java -version
-# Must print a version, not "JAVA_HOME is not set" error
 
-# Check 2: Full packaging succeeds for BOTH modules — not just Kotlin compile
+# Check 2: Confirm adb resolves (NEW — this failed mid-session on 16 Aug due to fresh-terminal PATH loss)
+which adb
+# If "command not found": run
+# export PATH="$PATH:/c/Users/admin/AppData/Local/Android/Sdk/platform-tools"
+# This was added to .bashrc this session but NOT YET CONFIRMED to persist — verify in a truly fresh terminal.
+
+# Check 3: Full packaging succeeds for BOTH modules
 ./gradlew :app:assembleDebug :consumer-wallet:assembleDebug
-# Must show BUILD SUCCESSFUL for both
 
-# Check 3: Confirm real APK files were produced
+# Check 4: Confirm real APK files were produced
 find . -name "*.apk" -path "*/outputs/*"
-# Must list actual .apk files, not empty
-If Check 2 fails on :app with a resource-linking error (e.g. resource color/X not found, resource mipmap/X not found): this is a packaging bug, not an NFC bug. Do NOT attempt to debug it via hardware testing — fix the resource issue first. See PRODUCTION_READINESS_CHECKLIST.md items #10–11 for the current known state of this exact class of bug.
 
-Historical note (why this check exists): On 29 July, a missing launcher icon bug was found this way. On 8 August, a missing colors.xml bug was found the same way. Both would have looked like "the app won't even install" during hardware testing, wasting significant time chasing what looks like a device/antenna problem but is actually a build config gap. A previously suspected HCE manifest registration bug (also from this pre-flight check tradition) was investigated and found to be a false alarm (see SESSION_HANDOVER.md, retracted in commit 4d77878) — it is intentionally removed from this checklist below since it was never real.
+# Check 5 (NEW — infrastructure, not build): Confirm backend AND Redis are both actually running
+# Redis is NOT on PATH — must use full path:
+/c/Users/admin/redis/redis-server.exe --port 6379   # separate terminal, leave running
+cd ../backend && npm run dev                          # separate terminal, leave running
+curl http://localhost:3000/health                     # Expected: {"status":"ok",...}
+
+# Check 6 (NEW — this exact failure happened this session): Confirm test accounts actually exist in the DB
+# Do NOT assume consumer2@test.com exists just because it's documented here — it previously didn't.
+# If in doubt, re-create via the real endpoint (see "Known Accounts" section below), not raw SQL.
+If Check 3 fails on :app with a resource-linking error: packaging bug, not NFC bug — see prior sessions' known instances (missing icons, missing colors.xml). Fix before proceeding.
+
+If Check 5 shows the backend can't reach Redis ("Reached the max retries per request limit" in backend logs): Redis isn't running. This is not a code bug — start it manually, it does not auto-start.
 
 🎯 TEST OBJECTIVE
 Verify the APDU protocol fix (0xC0→0x80, 0xC1→0x81) resolves communication between:
@@ -42,68 +59,87 @@ Phone A: Consumer Wallet (HCE - card emulation)
 Phone B: Merchant Terminal (NFC reader)
 Success: Successful APDU exchange → M-Pesa STK Push → Payment confirmation
 
-📋 PRE-TEST CHECKLIST
+📋 PRE-TEST CHECKLIST — UPDATED WITH REAL-DEVICE STEPS
 1. Infrastructure Verification
 Bash
 
-# Terminal 1 - Backend (must be running)
+# Terminal 1 - Backend
 cd Tap2Pay/backend
 npm run dev
-# Verify: info: Server listening on port 3000
+# Verify: "OrchestratePay backend running on port 3000"
 
 # Terminal 2 - Health check
 curl http://localhost:3000/health
-# Expected: {"status":"ok","timestamp":"..."}
 
-# Terminal 3 - Redis (if not running)
-cd /tmp && ./redis-server.exe --port 6379
-./redis-cli ping
-# Expected: PONG
-2. Build Environment Status — ✅ Wrapper Resolved, Verify Fresh Each Session
+# Terminal 3 - Redis (full path, NOT on system PATH)
+/c/Users/admin/redis/redis-server.exe --port 6379
+./redis-cli ping   # Expected: PONG
+2. Real Device Connectivity — NEW SECTION, replaces emulator-only assumptions from prior version of this doc
+⚠️ Critical correction from prior version of this document: earlier guidance assumed 10.0.2.2 (emulator-only loopback alias) would work for real-device testing. It does not. Real devices require:
+
 Bash
 
-# Verify wrapper exists (should be present now, committed in fd21ba5)
-ls Tap2Pay/android/gradlew
-ls Tap2Pay/android/gradlew.bat
-
-# Verify consumer-wallet compiles clean
 cd Tap2Pay/android
-./gradlew :consumer-wallet:compileDebugKotlin
-# Expected: BUILD SUCCESSFUL
 
-# Verify Google Services disabled (for NFC testing phase)
-grep "google-services" consumer-wallet/build.gradle.kts
-# Expected: // id("com.google.gms.google-services")
-3. Android Studio Setup
-Open Android Studio → File → Open → Tap2Pay/android/
-Gradle sync should complete quickly
-Build variants: debug selected for both :app and :consumer-wallet
-Verify no red errors in Build panel (yellow deprecation warnings are OK)
-4. Phone Preparation
-Phone A & B: Enable Developer Options → USB Debugging
-Both phones: Connect to Android Studio (appear in Device Manager)
+# Confirm device is visible
+adb devices
+# Expected: <serial>    device      (NOT "unauthorized" — if unauthorized, check phone screen for a trust prompt)
+
+# Forward the phone's localhost:3000 to your dev machine over USB
+adb -s <serial> reverse tcp:3000 tcp:3000
+
+# Verify the binding actually took
+adb reverse --list
+⚠️ This binding is lost every time the ADB daemon restarts (e.g. after a USB disconnect, adb kill-server, or sometimes spontaneously). If login suddenly fails with "Failed to connect" after previously working, check adb reverse --list first before assuming a new bug — re-run the adb reverse command above if the binding is gone.
+
+3. Known Test Accounts — CORRECTED, verify before assuming
+Account	Status as of 16 Aug	Notes
+consumer2@test.com / TestPass123	✅ Confirmed real, login-verified this session	Consumer ID a09df433-e945-40ad-9177-54ec6ac94300. Did not exist prior to 16 Aug despite being documented since early sessions — do not assume any documented test account exists without checking.
+merchant@test.com / TestPass123	⚠️ Exists in DB, APPROVED, login not yet attempted on real hardware with corrected localhost config	Next immediate test — see below
+If a documented test account turns out not to exist, recreate it via the real endpoint, not a raw SQL insert:
+
+Bash
+
+curl -X POST http://localhost:3000/api/v1/auth/consumer/register \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"254700000002","email":"consumer2@test.com","password":"TestPass123","displayName":"Test Consumer 2"}'
+Using the real endpoint guarantees the resulting row has the correct shape (bcrypt hash, phone hash, etc.) — a raw INSERT risks missing a column the app depends on.
+
+4. Android Studio Setup — unchanged
+Open Android Studio → Tap2Pay/android/ → confirm debug variant selected for both :app and :consumer-wallet → no red errors in Build panel.
+
+5. Phone Preparation
+Both phones: Developer Options → USB Debugging ON
+Both phones: Connect via USB, confirm Allow USB debugging prompt is accepted (status must read device, not unauthorized)
 Both phones: NFC enabled in Settings
-🔧 BUILD & INSTALL
-Step 1: Build
+🔧 BUILD & INSTALL — UPDATED
 Bash
 
 cd Tap2Pay/android
 ./gradlew :app:assembleDebug
 ./gradlew :consumer-wallet:assembleDebug
-Step 2: Install on Phones
-Phone A (Consumer):
+Step 2: Install and re-verify connectivity per phone
 
-Run consumer-wallet module
-Login: consumer2@test.com / TestPass123
-Should show: "Ready to Pay" with QR code
-Phone B (Merchant):
+For each phone you install onto:
 
-Run app module
-Login: merchant@test.com / TestPass123 / Device ID: any
-Should show: "Tap customer phone or NFC tag"
-🧪 TEST EXECUTION
-TEST 1: Phone-to-Phone HCE Payment (CRITICAL)
-Setup: Phone A: Consumer Wallet open, logged in. Phone B: Merchant Terminal open, logged in, "Ready for tap".
+Bash
+
+adb -s <serial> install -r <path-to-apk>
+adb -s <serial> reverse tcp:3000 tcp:3000
+adb reverse --list   # confirm before attempting login
+Phone A (Consumer): install consumer-wallet → login consumer2@test.com / TestPass123 → ✅ confirmed working this session — dashboard renders correctly.
+
+Phone B (Merchant): install app → login merchant@test.com / TestPass123 / Device ID: any → ⚠️ not yet tested with corrected config — do this before attempting any two-phone test.
+
+🧪 TEST EXECUTION — UNCHANGED CONTENT, STATUS UPDATED
+All test steps below (Test 1–4) are unchanged in mechanics from the prior version of this protocol. Status: none have been attempted yet. The work done this session was entirely single-device connectivity/login groundwork — necessary prerequisite work, not the NFC test itself.
+
+TEST 1: Phone-to-Phone HCE Payment (CRITICAL) — ⬜ NOT ATTEMPTED
+Blocked on: 2nd confirmed device, Merchant Terminal login verification.
+
+(Full setup/execution/expected sequence/logcat command — unchanged from prior version, retained below for reference)
+
+Setup: Phone A: Consumer Wallet open, logged in. Phone B: Merchant Terminal open, logged in, "Ready for tap."
 
 Execution: Align Phone A and Phone B NFC antennas (center-back), distance 0-2cm, hold steady 2-3 seconds.
 
@@ -113,143 +149,71 @@ Time	Phone B (Merchant)	Phone A (Consumer)
 0s	"Tag detected" vibrate/beep	-
 1s	"Processing..."	-
 2s	-	M-Pesa STK Push arrives
-3s	-	Enter PIN on Phone A (system dialog)
+3s	-	Enter PIN on Phone A
 4s	"Payment Confirmed" KES XXX	-
-APDU Exchange (Verify in Logcat):
-
-text
-
-NfcReaderManager: SELECT AID: F04F52434845535441
-NfcReaderManager: SELECT response: 90 00 ✓
-ConsumerHceService: processCommandApdu: INS=0x80 (GET DATA)
-NfcReaderManager: GET DATA: 80 80 00 00 00 ✓
-NfcReaderManager: JSON payload: {"phone":"254...","token":"..."}
-NfcReaderManager: CONFIRM: 80 81 00 00 00 ✓
-ConsumerHceService: Session cleared (single-use)
-NfcReaderManager: Transaction initiated: txnId=xxx
 Logcat Command:
 
 Bash
 
 adb logcat -s "NfcReaderManager:D" "ConsumerHceService:D" "ApduProtocol:D" "*:S"
-TEST 2: NFC Tag Read (NTAG215)
-Prerequisites: NTAG215/216 sticker programmed with:
+TEST 2: NFC Tag Read (NTAG215) — ⬜ NOT ATTEMPTED
+Blocked on: NTAG215/216 sticker availability (still unconfirmed).
 
-text
+TEST 3: P2P Transfer — ⬜ NOT ATTEMPTED
+Blocked on: 2nd confirmed device.
 
-orchestratepay://pay?mid=MERCHANT_ID&tid=TAG_ID&v=1&sign=HMAC
-Execution: Phone B: Merchant Terminal open, logged in. Tap NTAG215 sticker to back of Phone B.
+TEST 4: Error Handling — ⬜ NOT ATTEMPTED
+Blocked on: 2nd confirmed device. Test 4c (idempotency) additionally requires the server-side single-use review (Checklist item #23) to interpret correctly, not just observe.
 
-Success Criteria: Tag signature verified (HMAC-SHA256), no "Signature Invalid" error, STK Push initiated.
+🐛 TROUBLESHOOTING — NEW ENTRIES ADDED THIS SESSION
+Issue: App crashes immediately after apparently successful login
+New this session. Backend returns 200 and issues a JWT, but the app crashes with a NullPointerException mentioning a non-null parameter.
+Root cause (confirmed 16 Aug): backend/Android response-contract mismatch — backend omitted a field (phone) that Android's data class required non-null. See SESSION_HANDOVER.md Bug #10 for full detail.
+Fix already applied: backend now includes phone/displayName in consumer auth responses; Android made the field nullable as defense-in-depth.
+If this recurs on a different endpoint (e.g. merchant login): don't assume it's the same root cause automatically — verify by comparing the actual JSON response (curl -v the endpoint) against the Android data class field-by-field, the same way this instance was diagnosed.
 
-TEST 3: P2P Transfer
-Setup: Phone A: Consumer Wallet → P2P Send → enter amount → generate P2P token. Phone B: Consumer Wallet → P2P Receive.
+Issue: "Failed to connect to localhost/127.0.0.1:3000" on a real (non-emulator) device
+New this session. Two possible causes, check in this order:
 
-Execution: Tap Phone A to Phone B.
+API_BASE_URL still set to 10.0.2.2 — this only works in the emulator, never on a real phone. Check app/build.gradle and consumer-wallet/build.gradle.kts debug variant config.
+adb reverse binding dropped — happens automatically after any ADB daemon restart. Run adb reverse --list to check; re-run adb -s <serial> reverse tcp:3000 tcp:3000 if empty.
+Issue: Backend logs show "Reached the max retries per request limit (which is 3)"
+Cause: Redis isn't running. It is not on PATH and does not auto-start.
+Fix: /c/Users/admin/redis/redis-server.exe --port 6379 in its own terminal, verify with ./redis-cli ping → PONG.
 
-Success Criteria: P2P token transmitted, backend settles transfer, no "TOKEN_EXPIRED" errors.
+Issue: adb: command not found in a terminal that previously had it working
+Cause: MINGW64 environment does not reliably persist PATH exports across terminal windows, even after a .bashrc edit — reconfirmed this session.
+Fix: export PATH="$PATH:/c/Users/admin/AppData/Local/Android/Sdk/platform-tools" — re-run per fresh terminal until .bashrc persistence is independently confirmed.
 
-TEST 4: Error Handling
-4a: Expired HCE Token — Generate token, wait 90s (or reduce to 5s for testing), attempt tap. Expected: "Token Expired" error.
+Issue: Sentry crash on app startup (IllegalArgumentException: DSN is required...)
+Observed this session, not yet fixed. Currently recoverable — app continues past it. Do not treat as a hard blocker for NFC testing, but do not ignore indefinitely either; track per SESSION_HANDOVER.md Bug #11.
 
-4b: Invalid Tag (Forged Signature) — Program tag with wrong HMAC, tap terminal. Expected: "Signature Invalid" error, no STK Push.
+🐛 TROUBLESHOOTING — CARRIED FORWARD, UNCHANGED
+(Tag Not Detected, SELECT Failed / 6F 00, Resource Linking Errors, Kotlin Compile Errors, Session Expired, No STK Push — all unchanged from prior version, still valid, not reproduced here for brevity — see prior protocol version in version control)
 
-4c: Double Tap (Idempotency) — Complete successful payment, immediately tap again. Expected: New transaction (single-use tokens), not a duplicate charge. Also confirm this is enforced server-side, not just via client-side single-use token clearing — see PRODUCTION_READINESS_CHECKLIST.md item #23.
+📸 CAPTURE REQUIREMENTS — unchanged
+Screenshots, adb logcat -d > test[N]-logcat.txt, APDU hex dump, backend logs, PASS/FAIL notes → Tap2Pay/test-logs/2026-08-XX-NFC-Test/
 
-🐛 TROUBLESHOOTING
-Issue: "Tag Not Detected"
-Check	Action
-NFC enabled?	Settings → NFC → ON
-Phone cases?	Remove metal cases (block NFC)
-Antenna alignment?	Center-back of phones, 0-2cm
-Build variant?	Must be debug, not release
-Issue: "SELECT Failed" or "6F 00"
-Cause: APDU instruction mismatch (old bug, already fixed).
-Verify: NfcReaderManager.kt has:
-
-Kotlin
-
-val getDataApdu = byteArrayOf(0x80.toByte(), 0x80.toByte(), ...) // Not 0xC0
-val confirmApdu = byteArrayOf(0x80.toByte(), 0x81.toByte(), ...) // Not 0xC1
-Issue: Build Fails with Resource Linking Error (AAPT: error: resource X not found)
-This is NOT an NFC bug — it's a packaging bug and must be resolved before hardware testing begins. Do not attempt to diagnose via phone taps.
-
-Diagnostic approach:
-
-Read the exact resource name and type from the error (color/white, mipmap/ic_launcher, etc.)
-Grep for ALL references to that resource type across layouts before fixing just one:
-Bash
-
-grep -rho '@color/[a-zA-Z0-9_]*' app/src/main/res/layout/ | sort -u
-Create/update the appropriate values/ resource file with everything the grep found — fix once, not iteratively
-Re-run assembleDebug, confirm BUILD SUCCESSFUL before considering it closed
-Known instances of this exact failure mode:
-
-29 July 2026 — missing mipmap/ic_launcher (launcher icons)
-8 August 2026 — missing color/white (no colors.xml existed)
-Issue: Build Compile Errors (Kotlin-level, not resource-level)
-Diagnostic approach:
-
-Run ./gradlew :consumer-wallet:compileDebugKotlin in isolation first — don't build the whole project blind
-Read the FIRST error carefully — later errors in the same file are often cascading noise
-Common root causes previously found: wrong import path (android.nfc.X vs android.nfc.tech.X), missing Gradle dependency, missing import for an existing class, sub-package files needing explicit R import
-Issue: "Session Expired" Immediately
-Check	Action
-Phone time?	Check system time is correct
-Backend time?	Run date on server
-Timezone?	Ensure phones and server match
-Issue: No STK Push Received
-Check	Action
-Backend env?	Must be DARAJA_ENV=mock
-Phone format?	Must be 2547XXXXXXXX
-Sandbox credentials?	Check backend/.env
-Backend logs?	tail -f Tap2Pay/test-logs/*/backend.log
-📸 CAPTURE REQUIREMENTS
-For each test, record:
-
-Screenshot of both phone screens at each stage
-Logcat output: adb logcat -d > test[N]-logcat.txt
-APDU hex dump (if available in logs)
-Backend logs during transaction
-Result: PASS / FAIL with notes
-Save to: Tap2Pay/test-logs/2026-08-XX-NFC-Test/ (use actual test date)
-
-✅ SUCCESS CRITERIA SUMMARY
+✅ SUCCESS CRITERIA SUMMARY — status corrected
 Test	Critical	Expected Result	Status
-Phone-to-Phone HCE	YES	APDU exchange → STK Push → Confirmation	⬜
-NFC Tag Read	YES	Tag verified → STK Push → Confirmation	⬜
-P2P Transfer	Medium	Token exchange → Settlement	⬜
-Expired Token	Low	Proper error handling	⬜
-Invalid Signature	Low	Rejection before STK Push	⬜
-Idempotency (client + server)	Medium	No double-charges either side	⬜
-Overall Status: ⬜ NOT TESTED (blocked on Phase 0 build verification) / ⬜ IN PROGRESS / ⬜ PASSED / ⬜ FAILED
+Phone-to-Phone HCE	YES	APDU exchange → STK Push → Confirmation	⬜ NOT ATTEMPTED (blocked on 2nd device + merchant login test)
+NFC Tag Read	YES	Tag verified → STK Push → Confirmation	⬜ NOT ATTEMPTED (blocked on sticker availability)
+P2P Transfer	Medium	Token exchange → Settlement	⬜ NOT ATTEMPTED (blocked on 2nd device)
+Expired Token	Low	Proper error handling	⬜ NOT ATTEMPTED
+Invalid Signature	Low	Rejection before STK Push	⬜ NOT ATTEMPTED
+Idempotency (client + server)	Medium	No double-charges either side	⬜ NOT ATTEMPTED
+Overall Status: ⬜ NOT TESTED — single-device login groundwork complete and verified; two-device tests still blocked on hardware.
 
-📝 POST-TEST ACTIONS
-If All Tests Pass:
+📝 POST-TEST ACTIONS — unchanged, retained for when Phase 1 actually completes
+(If All Tests Pass / If Tests Fail sections unchanged from prior version)
 
-Update this document with "PASSED" status and date
-Save logcat files to repository
-Confirm current commit count via git log --oneline | wc -l (do not copy a stale number from docs)
-Create PR to upstream:
-text
-
-1. https://github.com/gabrielngige/OrchestratePay_Platform
-2. New Pull Request
-3. base: gabrielngige/main ← compare: MARKDISPLAYNONE/main
-4. Title: "fix(nfc): Resolve APDU protocol mismatch + stabilize Android build"
-5. Reference this test protocol and SESSION_HANDOVER.md
-If Tests Fail:
-
-Capture logs immediately (before they scroll away)
-Document failure mode in this file
-Check APDU instructions in code first — this is the most common root cause historically
-Do NOT push to upstream until resolved
-🔗 QUICK REFERENCE
+🔗 QUICK REFERENCE — UPDATED
 Resource	Value
-Backend URL	http://localhost:3000
-Merchant Login	merchant@test.com / TestPass123
-Consumer Login	consumer2@test.com / TestPass123
-Key Files	NfcReaderManager.kt, ConsumerHceService.kt, ApduProtocol.kt
+Backend URL	http://localhost:3000 (real device: requires adb reverse tcp:3000 tcp:3000, re-apply after daemon restarts)
+Merchant Login	merchant@test.com / TestPass123 — ⚠️ not yet hardware-tested with corrected config
+Consumer Login	consumer2@test.com / TestPass123 — ✅ confirmed working, account created 16 Aug via real registration endpoint
+Redis	/c/Users/admin/redis/redis-server.exe --port 6379 — NOT on PATH, manual start required every session
+Key Files	NfcReaderManager.kt, ConsumerHceService.kt, ApduProtocol.kt, ConsumerApiClient.kt, ConsumerSessionManager.kt, backend/src/routes/auth.ts
 Gradle Version	9.4.1 (wrapper committed, fd21ba5)
 Emergency Logs	Tap2Pay/test-logs/*/backend.log
 END OF PROTOCOL
