@@ -48,7 +48,7 @@ data class LoyaltyBalance(
     @SerializedName("reward_type")      val rewardType:      String?,
     @SerializedName("points_balance")   val pointsBalance:   Int,
     @SerializedName("stamps_balance")   val stampsBalance:   Int,
-    @SerializedName("lifetime_points")  val lifetimePoints:  Int,
+    @SerializedName("lifetime_points")  val lifetimePoints:  Int = null,
     @SerializedName("redeem_threshold") val redeemThreshold: Int?
 )
 
