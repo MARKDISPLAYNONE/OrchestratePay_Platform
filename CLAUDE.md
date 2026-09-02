@@ -26,9 +26,9 @@ npx jest --testNamePattern "circuit breaker"
 ### Web (`Tap2Pay/web/`)
 
 ```bash
-npm run dev            # Next.js dev server (auto-selects :3001 if :3000 is taken)
+npm run dev         # Vite 6 dev server on :3001 (proxies /api/* to backend :3000)
 npm run build          # production build
-npm run lint           # Next.js ESLint
+npm run lint        # ESLint
 npm run test:unit      # Jest unit tests
 npm run test:e2e       # Playwright end-to-end tests
 npm run test:e2e:ui    # Playwright with interactive UI
