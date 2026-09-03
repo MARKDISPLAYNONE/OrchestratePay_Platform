@@ -96,5 +96,5 @@ export const p2pPaySchema = Joi.object({
 
 export const merchantHceTokenSchema = Joi.object({
   amountCents: Joi.number().integer().min(100).max(MAX_TRANSACTION_CENTS).required(),
-  consumerId:  Joi.string().uuid().required(),
+  consumerId: Joi.string().uuid().optional().allow(null),
 })

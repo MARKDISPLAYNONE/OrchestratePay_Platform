@@ -75,6 +75,7 @@ req GET /api/v1/loyalty/programme "" "$MT";                              check "
 echo "=== 8. Payments (placeholder Daraja creds -> 502 is a PASS) ==="
 req POST /api/v1/transactions "{\"merchantId\":\"$MID\",\"amountCents\":1000,\"source\":\"CONSUMER_QR\",\"consumerQrToken\":\"$QRT\",\"idempotencyKey\":\"$(hex32)\",\"timestamp\":$(now),\"currency\":\"KES\"}" "$MT"
 check "POST /transactions (merchant scans consumer QR, CONSUMER_QR)" "201|502" "status=$(echo "$BODY"|j status)"
+req POST /api/v1/transactions/merchant-hce-token "{\"amountCents\":1000}" "$MT"; check "merchant-hce-token (Present NFC, no consumerId yet)" 200
 K=$(hex32)
 req POST "/api/v1/consumers/pay/$MID" "{\"amountCents\":1000,\"idempotencyKey\":\"$K\",\"timestamp\":$(now),\"currency\":\"KES\"}" "$CT"
 check "POST /consumers/pay/:merchantId" "201|502" "status=$(echo "$BODY"|j status)"
