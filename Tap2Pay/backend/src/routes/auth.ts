@@ -705,9 +705,9 @@ router.post('/consumer/refresh', async (req: Request, res: Response) => {
 
     res.json({
       token: newAccessToken, refreshToken: newRefreshToken,
-      role: 'CONSUMER', consumerId: consumer.id,
-      phone: consumer.phone,
-      displayName: consumer.display_name,
+      role: 'CONSUMER', consumerId: consumer_id,
+      phone: phone,
+      displayName: display_name,
       expiresAt: Date.now() + CONSUMER_ACCESS_TTL_S * 1000,
     })
 

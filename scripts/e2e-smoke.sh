@@ -29,7 +29,7 @@ req GET /readiness; check "readiness" 200
 
 echo "=== 1. Consumer signup (fresh account) ==="
 E="smoke$(date +%s)@test.com"
-req POST /api/v1/auth/consumer/register "{\"email\":\"$E\",\"password\":\"TestPass123\",\"phone\":\"254700009999\"}"
+req POST /api/v1/auth/consumer/register "{\"email\":\"$E\",\"password\":\"TestPass123\",\"phone\":\"254700$(date +%s | cut -c5-10)\"}"
 check "consumer register $E" "200|201"
 echo "      fields: token=$([ -n "$(echo "$BODY"|j token)" ] && echo yes || echo NO) refreshToken=$([ -n "$(echo "$BODY"|j refreshToken)" ] && echo yes || echo NO) phone=$(echo "$BODY"|j phone) displayName=$(echo "$BODY"|j displayName) expiresAt=$(echo "$BODY"|j expiresAt)"
 
@@ -73,7 +73,7 @@ req GET /api/v1/merchants/me/analytics/weekly "" "$MT";                  check "
 req GET /api/v1/loyalty/programme "" "$MT";                              check "loyalty/programme" "200|404"
 
 echo "=== 8. Payments (placeholder Daraja creds -> 502 is a PASS) ==="
-req POST /api/v1/transactions "{\"amountCents\":1000,\"source\":\"QR_CODE\",\"idempotencyKey\":\"$(hex32)\",\"timestamp\":$(now),\"currency\":\"KES\"}" "$MT"
+req POST /api/v1/transactions "{\"merchantId\":\"$MID\",\"amountCents\":1000,\"source\":\"QR_CODE\",\"idempotencyKey\":\"$(hex32)\",\"timestamp\":$(now),\"currency\":\"KES\"}" "$MT"
 check "POST /transactions (merchant, QR_CODE)" "201|502" "status=$(echo "$BODY"|j status)"
 K=$(hex32)
 req POST "/api/v1/consumers/pay/$MID" "{\"amountCents\":1000,\"idempotencyKey\":\"$K\",\"timestamp\":$(now),\"currency\":\"KES\"}" "$CT"
