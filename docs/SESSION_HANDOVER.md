@@ -1,423 +1,423 @@
-Here's the complete, drop-in replacement. Every section that was already accurate is preserved verbatim; new findings from this session (Bug #16, Bug #17, IdempotencyKeyGen verification, E2E test correction, terminal `cat` quirk) are integrated at the correct chronological/logical positions.
-
-```markdown
 # SESSION_HANDOVER.md
 
-**Last Updated:** 2 September 2026 (Session 5, CONTINUED — second-opinion deep-dive)
+**Last Updated:** 3 September 2026 (Session 6 — onboarding re-baseline)
 **Project:** OrchestratePay Platform
-**Status:** 🟡 ALL THREE SURFACES RUNNING AGAINST ONE LIVE BACKEND (web + consumer-wallet + merchant app on emulator) — consumer-wallet PROVEN on emulator; Merchant Terminal (`:app`) BLOCKED by fatal Sentry crash-on-launch (fix in hand, not yet applied); **TWO NEW BUGS DIAGNOSED THIS SESSION** (Bug #16: dead P2P buttons in wallet; Bug #17: token-expiry 401 on both Android apps — refresh-token contract fully mapped, fix designed, not yet applied); NFC hardware tests still awaiting 2nd physical device
-**Prepared by:** Senior Lead Dev (10x) — Session 5
-**Recipient:** Incoming Senior Lead Dev / Project Continuation Lead
+**Status:** 🟡 Backend + web + consumer-wallet proven against one live backend. Merchant terminal (`:app`) has a committed Sentry fix (`94afe82`) that has NEVER been launch-verified. Bug #16 (dead P2P buttons) unfixed. Bug #17 (token-expiry 401) committed (`176101f`), never runtime-tested. Working tree DIRTY (1 file). NFC/HCE never tested on two physical phones — the product thesis remains unverified.
+**Prepared by:** Incoming Lead Dev — Session 6
+**Recipient:** Any developer touching this repo. **This document is the single source of truth for project STATE.** READMEs describe how things are *meant* to work; this file describes what is *proven* to work.
 
 ---
 
-## 🎯 QUICK ORIENTATION (Read This First)
+## 0. HOW TO ONBOARD — mandatory order, do not skip steps
 
-**What is this project?** NFC Tap-to-Pay platform for the Kenyan market. Integrates with M-Pesa (Daraja API, sandbox). Consumer taps phone/sticker → M-Pesa STK Push → PIN → Payment confirmed. QR fallback for iOS.
+Every previous handover was wrong about something because the writer trusted a doc instead of a command. You will not repeat that if you do the following, in order, and paste outputs as you go.
 
-**⚠️ Date discrepancy (flagged, unresolved):** Onboarding brief said 9 Aug 2026; prior handover was dated 16 Aug 2026; the dev machine clock prints **2 September 2026** (Redis banner, health timestamps). Either ~2.5 weeks of real time passed since the 16 Aug session, or the machine clock is wrong. **Verify the real date before scheduling anything.** The clock discrepancy correlates with observed environment drift (npm suddenly blocking install scripts).
+| Step | Do this | Why |
+|---|---|---|
+| **1** | Read this file top to bottom (≈20 min). | Ground truth, open bugs, environment traps. |
+| **2** | Run `git log --oneline --reverse` and read **§9 Annotated History** alongside it. | You need to know *which* commits are real fixes, which are retractions, and which are docs-claiming-things. Roughly 30% of commits are docs. |
+| **3** | Run `git status --short` and `git remote -v`. Confirm the tree matches **§1**. If it doesn't, stop and reconcile before anything else. | Three consecutive handovers have mis-stated tree state. |
+| **4** | Regenerate the directory tree (**§8**, command included) and compare to the tree in this doc. | Undocumented modules exist (`dashboard/`, `skills/`). |
+| **5** | Read the docs in the order and with the trust ratings in **§10**. Do NOT read `Tap2Pay/README.md` first. | It is the most detailed and the most wrong. |
+| **6** | Bring the environment up per **§7** and run the **Phase 0 checklist** in §11. | Every "Android bug" in July/August turned out to be an environment problem first. |
+| **7** | Only now: pick the top item in **§11 Immediate**. | — |
 
-**✅ RESOLVED — Stack contradiction (former item #34, open since July):** `Tap2Pay/web/` is **Vite 6 + React 19 + react-router-dom**. Verified via package.json. There is no Next.js in the web app. Explanation found: the *upstream original repo* (gabrielngige) used Next.js 15; the fork rewrote web as Vite and the docs never caught up. Env var is `VITE_API_URL`, NOT `NEXT_PUBLIC_API_URL` (README is stale on this). Closed in commit `96f2d0b`.
-
-**⚠️ Correction to the 16 August handover:** That document was written BEFORE the previous dev's final commits landed. The "5 uncommitted files" were in fact committed as `73b066c` (localhost fix) and `154b0a9` (auth contract fix), plus docs in `b3c2cc9`. Working tree was CLEAN at Session 5 start. This is the third consecutive handover whose status claims did not match disk state — the "no status without pasted command output" rule remains in force and is the reason this document cites specific command outputs and commit hashes throughout.
-
-**Current Status — Ground Truth Only (all verified this session by pasted output):**
-
-- ✅ Backend running and healthy — full startup sequence observed, `"OrchestratePay backend running on port 3000"` seen
-- ✅ Redis 5.0.14.1 running (PID 17212, manual start, PONG verified)
-- ✅ PostgreSQL up (`:5432` LISTENING, 4 migrations applied — 001–004, verified via `schema_migrations` query)
-- ✅ Web frontend running on `:3001` (`npm run dev` now works on Windows — Bug #12 fixed and live-verified)
-- ✅ Web consumer portal: login `consumer2@test.com` → 200, dashboard + transactions render
-- ✅ Web merchant portal: login `merchant@test.com` → 200, analytics + KYC status render
-- ✅ **Consumer wallet app PROVEN ON EMULATOR** (project first): login → JWT → WebSocket connected (`WS: consumer wallet connected`) → dashboard renders with real data
-- ✅ Bug #14 fix verified at API level: `/consumers/me/loyalty` → `{"balances":[]}`, `/me` → 200, `/me/transactions` → 200, health `ok` AFTER all three (backend survives the endpoint that used to kill it)
-- ✅ **IdempotencyKeyGen.kt verified compliant** (this session): SHA-256 → 16 bytes → `%02x` = exactly 32 lowercase hex chars. Passes Joi `.length(32).hex()`. No fix needed.
-- 🔴 Merchant Terminal (`:app`) **cannot start on the emulator** — fatal Sentry crash loop (Bug #11, upgraded to CRITICAL — see findings log). Fix written, not yet applied
-- 🔴 **Bug #16 (NEW, this session):** Consumer wallet "Scan QR" / "Send Money" buttons are complete no-ops — no navigation, no crash, no log lines. Root cause confirmed: `HomeFragment.kt` binds zero click listeners; buttons are orphaned views in `fragment_home.xml`. Target Activities all exist. Fix designed, blocked on XML file content extraction (see environment notes).
-- 🔴 **Bug #17 (NEW, this session):** Both Android apps surface raw 401 errors after JWT expiry (merchant 8h, consumer 24h). Root cause confirmed: neither client persists the `refreshToken` the backend issues (both `AuthResponse` data classes silently drop the field); neither client has an OkHttp `Authenticator` or 401 interceptor. Merchant app: client-side clock expiry in `SessionManager.getToken()` → null token → no auth header → 401 → `ApiResponse.Declined("Request error 401")`. Consumer wallet: WORSE — `bearer()` returns literal `"Bearer null"`, AND `ConsumerService` methods return bare types (not `Response<T>`), so Retrofit throws unhandled `HttpException` on 401 — potential app crash. Backend refresh contract fully mapped: `POST /auth/refresh` (merchant) and `POST /auth/consumer/refresh` (consumer), both use single-use rotation (old token revoked on every refresh). Fix designed (Authenticator + synchronized single-flight refresh + force-logout fallback), not yet applied.
-- ⚠️ 2nd NFC phone — STILL not confirmed. Never has been. `adb devices` across all sessions shows at most one real device (`RF8R42CY49R`) plus the new emulator
-- ⚠️ Test suite reality: **93 suites / 1959 tests, 108 FAILING, 1847 passing** (Bug #15 — pre-existing rot, not from this session's changes; proven by A/B)
-
-**Working tree state (as of end of Session 5 so far):** CLEAN at HEAD `23ef6f6`, all commits pushed to `fork` remote. Branch is ahead of `origin/main` (gabrielngige) by ~36 commits — origin is NOT the push target.
-
-**Git remotes (verified):**
-- `origin` → `https://github.com/gabrielngige/OrchestratePay_Platform.git` (upstream — do not push)
-- `fork` → `https://github.com/MARKDISPLAYNONE/OrchestratePay_Platform.git` (our backup — push target, in sync through `23ef6f6`)
+**Standing rules (each born from a real incident — see §12):**
+- No status claim without pasted command output. Not in chat, not in docs, not in commit messages.
+- `git status --short` before EVERY commit. Check `N files changed` against intent.
+- Push to `fork`, never `origin`.
+- Terminal: one command per paste. Multi-line pastes scramble in this MINGW64 setup.
+- XML files: paste through `sed 's/</[/g; s/>/]/g' <file>` (see §7, "angle-bracket stripping").
+- "Committed" ≠ "applied" ≠ "verified". Track all three separately (see bug table, §2).
 
 ---
 
-## 🚨 FINDINGS LOG (Chronological, Most Recent First)
+## 1. GROUND TRUTH — verified by pasted output, 3 Sep 2026 17:30 UTC
 
-### Bug #17 (🔴 NEW): Token expiry → raw 401 on both Android apps — no refresh-token handling anywhere (2 September 2026, second-opinion deep-dive)
+**Machine clock:** `2026-09-03T17:30:21Z` (from `/health`). Prior handovers flagged a date discrepancy vs the onboarding brief; the clock has been internally consistent since 2 Sep. Treat 3 Sep 2026 as real.
 
-**Symptom:** Merchant app "Present NFC" shows HTTP 401 ~20h after a successful login. Consumer wallet likely exhibits the same (or worse — see below) after 24h.
+| Item | State | Evidence |
+|---|---|---|
+| Backend | ✅ up | `GET /health` → `{"status":"ok","version":"1.0.0"}`; `GET /readiness` → `{"status":"ready"}` (Postgres + Redis both answering) |
+| HEAD | `176101f` | `git log`; == `fork/main` |
+| Ahead of `origin/main` | 41 commits | `git status` |
+| Working tree | 🔴 **DIRTY** — `M Tap2Pay/android/consumer-wallet/src/main/java/com/orchestratepay/consumer/api/ConsumerApiClient.kt` | `git status --short` **after** `176101f` was pushed. Likely CRLF normalisation churn (git warned "LF will be replaced by CRLF" on this file during the commit). **Unconfirmed — see §11 Phase 0.** |
+| Gradle wrapper | ✅ present | `ls Tap2Pay/android` shows `gradlew`, `gradlew.bat`, `gradle/` (android/README.md §3 says it isn't checked in — stale) |
+| Android SDK levels | compileSdk 35 / minSdk 26 / targetSdk 35 | `app/build.gradle` (Tap2Pay/README says target 34 — stale) |
+| `:app` debug API URL | `http://localhost:3000/api/v1/` + `ws://localhost:3000` | `app/build.gradle` buildTypes.debug (requires `adb reverse tcp:3000 tcp:3000`) |
+| `:app` release API URL | `https://api.orchestratepay.co.ke/api/v1/` | `app/build.gradle` — **no such host is known to be deployed** |
+| `:app` defaultConfig API URL | `https://api-sandbox.orchestratepay.co.ke/v1/` | ⚠️ path is `/v1/` not `/api/v1/`. Dead today (both buildTypes override it) but any future `staging` buildType inherits the wrong path. Backlog nit, fix in Phase S. |
+| Sentry in `:app` | `io.sentry:sentry-android:7.6.0` | `app/build.gradle`; DSN from `-PSENTRY_DSN` gradle property, empty by default → root cause of Bug #11 |
+| TLS pins | `api.orchestratepay.co.ke` → `C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=`, `diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvmFZRIjnadY=` | `network_security_config.xml`. These are the published ISRG Root X1 / X2 SPKI pins (root README correct; Tap2Pay/README "placeholder pins" claim stale). Also pins `sandbox.safaricom.co.ke`/`api.safaricom.co.ke` — the app never calls Safaricom directly; harmless, odd. Cleartext permitted for `10.0.2.2` and `localhost`. |
+| Remotes | `origin` = gabrielngige (upstream, DO NOT PUSH); `fork` = MARKDISPLAYNONE (push target) | verified prior session |
 
-**Prior status:** Logged as Observation #3 ("neither Android client stores refreshToken"). That was correct but understated — this is not a "product decision needed" backlog item, it is a **live, reproducible, user-facing auth failure** that hits every user after their first session expires. Upgraded to tracked bug.
+**Inherited from Session 5 — verified then by pasted output, not re-verified today:**
+- Redis 5.0.14.1 manual start; PostgreSQL native on `:5432`; 4 migrations applied (001–004).
+- Web on `:3001` via Vite; consumer + merchant web portals log in and render.
+- Consumer wallet: login → JWT → WebSocket → dashboard, on emulator `emulator-5554` AND on real device `RF8R42CY49R` (16 Aug).
+- Backend tests: **93 suites / 1959 tests / 108 failing** (Bug #15).
+- Test accounts: `consumer2@test.com` / `TestPass123` (ID `a09df433-…`); `merchant@test.com` / `TestPass123` (ID `6fce73f3-…`, APPROVED, `nfcSigningKey: null` because `NFC_SIGNING_SECRET` unset); `consumer@example.com` (jane kamaea — pre-existing, different data).
 
-**Root cause (fully confirmed from source review of all four relevant files):**
+---
 
-**Merchant app (`OrchestaApiClient.kt` + `SessionManager.kt`):**
-1. `SessionManager.getToken()` performs a client-side expiry check: `return if (System.currentTimeMillis() < expiresAt) token else null`. Once 8h passes, it returns `null` — the token is dead before the request is even built.
-2. The OkHttp auth interceptor reads `SessionManager.getToken()`. When null, it sends the request with **no Authorization header at all**.
-3. Backend correctly 401s the unauthenticated request.
-4. `safeCall()` maps `response.code() in 400..499` to `ApiResponse.Declined(body?.reason ?: "Request error ${response.code()}")`. Since a 401-with-no-body has no `reason` field, the user sees the literal string **"Request error 401"**.
-5. The `AuthResponse` data class (`token, merchantId, merchantName, expiresAt, nfcSigningKey, kraPin`) **omits `refreshToken` entirely**. The backend sends it in the login response (`token, refreshToken, role: 'MERCHANT'` — confirmed from `auth.ts` line 149), but Gson silently drops the unmapped field.
+## 2. OPEN BUG INVENTORY — with the three-state status
 
-**Consumer wallet (`ConsumerApiClient.kt` + `ConsumerSessionManager.kt`) — TWO compounding problems:**
-1. `bearer()` is defined as `"Bearer ${ConsumerSessionManager.getToken()}"`. When `getToken()` returns null, Kotlin string templates render this as the literal text `"Bearer null"` — not "no header." Functionally the same 401, but sloppier and could trip WAF/logging pattern matchers.
-2. **This is the actually serious one:** `ConsumerService` methods return **bare types** (e.g., `suspend fun getProfile(...): ConsumerProfile`), not `Response<T>`. When a Retrofit suspend function's return type is not wrapped in `Response<T>`, Retrofit throws `retrofit2.HttpException` on any non-2xx response instead of returning a response object. **None of the call sites in `ConsumerApiClientInstance` catch this.** `getProfile()`, `getTransactions()`, `getLoyalty()`, `p2pPay()` — all will throw uncaught into whatever ViewModel called them the moment a 401 happens. Whether this crashes the app or fails silently depends on whether the ViewModels wrap calls in `try/catch` — `HomeViewModel.kt` not yet reviewed to confirm.
-3. Same `AuthResponse` omission as merchant: `token, consumerId, phone, displayName, expiresAt` — no `refreshToken`.
+"Committed" = code is in git. "Applied" = the fix is on disk/in the APK that gets run. "Verified" = a human watched it work and pasted the evidence.
 
-**Backend refresh contract (fully mapped from `Tap2Pay/backend/src/routes/auth.ts`):**
+| # | Bug | Severity | Committed | Applied | Verified | Blocker for |
+|---|---|---|---|---|---|---|
+| **11** | `:app` fatal crash on launch — `SentryInitProvider: DSN is required` | 🔴 Blocker | ✅ `94afe82` | ❓ APK not rebuilt/installed since | ❌ | Every merchant-app test |
+| **16** | Consumer wallet "Scan QR" / "Send Money" — no click listeners in `HomeFragment.kt` | 🔴 High | ❌ | ❌ | ❌ | P2P feature entirely unreachable |
+| **17** | Token expiry → raw 401 / `"Bearer null"` / possible `HttpException` crash; no refresh handling | 🔴 High | ✅ `176101f` (4 files, +556/−293) | ✅ in source; APKs not rebuilt | ❌ never fired a real refresh | Any session > 8h (merchant) / 24h (consumer) |
+| **17b** | `AuthEventBus` / `ConsumerAuthEventBus` force-logout signal not consumed by any Activity | 🟢 Low | — | — | — | Only matters when refresh itself fails |
+| **17c** | Device-binding key (`merchant:device:{id}`, 9h TTL) may not be re-armed by `/auth/refresh` → valid refreshed JWT rejected at hour 9 | 🟡 Hypothesis | — | — | — | Sustained merchant sessions. Read `middleware/auth.ts` + refresh handler in `auth.ts` to confirm/deny. |
+| **17d** | WebSocket authenticated at connect with old JWT; behaviour after refresh unknown | 🟡 Hypothesis | — | — | — | `PAYMENT_CONFIRMED` delivery after hour 8 |
+| **15** | 108 backend test failures (7 suites); CI status on fork unknown | 🟡 Medium | — | — | — | Any deployment (Phase S) |
+| **18 (new)** | Working tree dirty after clean commit — `ConsumerApiClient.kt` | 🟡 Process | — | — | — | Trusting `git status` |
+| **19 (new)** | Doc drift catalogue (§10) — incl. this doc's predecessor mis-stating Bug #11 as unapplied one day after it was committed | 🟡 Corrosive | — | — | — | Onboarding accuracy |
+| **20 (new)** | APDU instruction bytes: commit `16e333c` changed reader to `0x80`/`0x81`; Tap2Pay/README documents `0x80 0xC0` / `0x80 0xC1`. Reader vs HCE service vs docs need a three-way check. | 🟡 Medium | — | — | — | Phase 6 tap test |
+| — | NFC/HCE never tested on two physical phones | 🔴 Product thesis | — | — | — | Everything |
+| 1–10, 12–14 | Closed. Summaries in §5, details in git history. | ✅ | ✅ | ✅ | — |
+
+---
+
+## 3. NEW FINDINGS THIS SESSION (3 Sep 2026)
+
+### F-1: Bug #11 fix is committed, not verified — and the previous handover said otherwise
+`git log` shows `94afe82 fix(android): disable Sentry auto-init in debug builds (Bug #11) + session 5 handover rewrite` at 2 Sep 23:14. The handover committed 19 hours later (`feebff7`) and the Session-5 summary both state "fix written, not applied." One of those is wrong, and git wins. **Verify:** `git show --stat 94afe82` and `ls Tap2Pay/android/app/src/debug/`. If `AndroidManifest.xml` is there containing a `meta-data android:name="io.sentry.auto-init" android:value="false"` entry, the fix is applied in source; the remaining step is rebuild → install → launch → paste logcat showing no `SentryInitProvider` exception and `LoginActivity` on screen.
+
+### F-2: The "terminal `cat` rendering quirk" is (very probably) chat-side angle-bracket stripping
+Session 5 logged four failed `cat`s on XML files and concluded MinTTY was at fault. Today's evidence contradicts that: `cat network_security_config.xml` pasted as `api.orchestratepay.co.ke C5+lpZ7… localhost` — exactly the XML **text nodes**, with every `<tag>` removed. `cat AndroidManifest.xml` pasted as nothing — it is ~100% tags. The terminal is printing fine; the content is being stripped as HTML when pasted into the chat. This also explains the empty backticks in the previous handover where `<meta-data …>` should be.
+**Workaround (untested — test it first):** `sed 's/</[/g; s/>/]/g' <file>` then paste. If square brackets arrive intact, use this for every XML file from now on and **Bug #16 is unblocked**. If not, `code <file>` and copy from the editor.
+**Consequence:** delete the "cat quirk" runbook item from §7 once confirmed; it sent people down the wrong path for a day.
+
+### F-3: Working tree dirty immediately after a clean commit (Bug #18)
+`176101f` committed `ConsumerApiClient.kt`; `git status` afterwards shows it modified again. Git emitted `LF will be replaced by CRLF` for exactly this file. Most likely `core.autocrlf` is rewriting line endings on checkout and the index disagrees with the working copy. **Diagnose before doing anything:** `git diff --stat` (expect large) then `git diff -w --stat` (if empty → whitespace only). Fix options: (a) `git add --renormalize Tap2Pay/android` + commit "chore: normalise line endings"; (b) add a `.gitattributes` with `*.kt text eol=lf`. Do NOT just `git checkout -- file` without looking — if it isn't whitespace, it's an uncommitted Bug #17 edit.
+
+### F-4: Build configuration facts (from `app/build.gradle`, first time captured in a handover)
+- Groovy DSL for root + `:app`; commit history says `nfc-core` and `consumer-wallet` are `.kts`. Mixed — fine, just know it.
+- `testImplementation project(':softpos')` — `:app` unit tests depend on the softpos module. Any softpos compile break breaks `:app:test`.
+- Google Services plugin absent (commented out in `1d332fb`, Jul 28) → FCM push is dead in both apps until re-enabled. Not documented anywhere except that commit.
+- Retrofit 2.9 / OkHttp logging 4.11 / Room 2.6 via KSP / WorkManager 2.11.2 / CameraX 1.3.4 / ML Kit barcode 17.2.0 / security-crypto 1.1.0-alpha06 (alpha in a payments app — backlog).
+
+### F-5: Release build has no backend to talk to
+Release `API_BASE_URL` is `https://api.orchestratepay.co.ke/api/v1/`. No deployment of that host is recorded anywhere in git, docs, or prior handovers. Root README says K8s manifests exist with P0 gaps; Tap2Pay/README says they don't exist; commit `534c7ba` (Jun 21) says P0 gaps were fixed. **Nobody has run `kubectl apply`.** "Production-ready" in any doc must be read as "compiles."
+
+### F-6: Physical-device networking will fail on the day of the tap test unless prepared
+Debug builds use `localhost` + `adb reverse`. That works for one phone on USB. Two phones both need `adb reverse` set (per device, non-persistent across daemon restarts). If either phone is on Wi-Fi only, it needs a build pointing at the dev machine's LAN IP with that IP added to the cleartext allowlist in **both** apps' `network_security_config.xml`, or an ngrok HTTPS URL. **Decide and build this before the phones are in the room.**
+
+---
+
+## 4. BUG #17 — what was committed, what is still unknown
+
+Committed in `176101f` (per the Session-5 design; treat file-level details as claims until you read the diff):
+- `refreshToken` added to both `AuthResponse` data classes and persisted in both `SessionManager` / `ConsumerSessionManager` (EncryptedSharedPreferences).
+- OkHttp `Authenticator` (not Interceptor) on both clients, synchronized single-flight refresh, retry-with-new-token, force-logout fallback via an event bus.
+- Consumer `bearer()` no longer renders `"Bearer null"`.
+
+Backend contract (mapped from `auth.ts`, Session 5):
 
 | | Merchant | Consumer |
 |---|---|---|
-| **Endpoint** | `POST /api/v1/auth/refresh` | `POST /api/v1/auth/consumer/refresh` |
-| **Request body** | `{ "refreshToken": "<string>" }` | `{ "refreshToken": "<string>" }` |
-| **Response** | `{ "token": "<new JWT>", "refreshToken": "<new refresh>" }` | `{ "token": "<new JWT>", "refreshToken": "<new refresh>" }` |
-| **Token storage** | `merchant_refresh_tokens` (SHA-256 hashed) | `consumer_refresh_tokens` (SHA-256 hashed) |
-| **Rotation** | **Single-use** — `UPDATE merchant_refresh_tokens SET revoked_at = NOW() WHERE id = $1` on every refresh | **Single-use** — same pattern on `consumer_refresh_tokens` |
-| **TTL** | 8h access + 30d refresh (from `auth.ts` line 25 comment) | 24h access + refresh TTL TBD (verify from `issueRefreshToken`) |
+| Endpoint | `POST /api/v1/auth/refresh` | `POST /api/v1/auth/consumer/refresh` |
+| Body | `{ "refreshToken": "…" }` | same |
+| Response | `{ "token": "…", "refreshToken": "…" }` | same |
+| Rotation | single-use (old token revoked on use) | single-use |
+| TTL | 8h access / 30d refresh | 24h access / refresh TTL unverified |
 
-**⚠️ CRITICAL DESIGN IMPLICATION of single-use rotation:** If two API calls 401 at nearly the same moment (e.g., a screen that fires `getProfile()` + `getTransactions()` concurrently) and both naively call `/auth/refresh` with the same refresh token, the first call succeeds and burns the token; the second call gets `401 Invalid or expired refresh token` and the user gets force-logged-out even though a perfectly valid session exists from the first refresh. **The `Authenticator` implementation MUST include a synchronized single-flight guard** (check if another thread already refreshed while we waited for the lock, and use their token instead of making a second refresh call). This is not optional — guessing wrong here introduces a new concurrency bug.
-
-**Fix (designed, NOT yet applied — blocked on confirming exact refresh response shape + `HomeViewModel.kt` crash assessment):**
-1. Add `refreshToken: String` to both `AuthResponse` data classes.
-2. Add `KEY_REFRESH_TOKEN` to both `SessionManager`/`ConsumerSessionManager` with save/get methods in `EncryptedSharedPreferences`.
-3. Persist `refreshToken` in the login success path of both API clients.
-4. Add `OkHttp Authenticator` (NOT Interceptor — Authenticator is the correct mechanism for reactive 401 handling) to both `OkHttpClient.Builder()` chains:
-   - Synchronized single-flight refresh (prevent concurrent refresh calls from burning the token).
-   - Retry the original request with the new access token.
-   - On unrecoverable failure (refresh call itself 401s) — clear stored session, signal UI to route to `LoginActivity`.
-5. Fix consumer `bearer()` to return `null` (not `"Bearer null"`) when no token exists, and handle the null case at the call site.
-6. **Consider wrapping `ConsumerService` return types in `Response<T>`** to prevent unhandled `HttpException` on any future non-2xx — this is a broader hardening item beyond just the 401 case.
-
-**Backlog re-prioritization note:** This was previously sitting near the bottom of the backlog as a "nice to have." It shouldn't be — it's a live, reproducible, user-facing auth failure with a well-understood fix. Moved to **immediate priority, right after Bug #11 and Bug #16**.
+**Unknowns that must be closed before calling #17 done:**
+1. Has anyone read the `176101f` diff end-to-end? (`git show 176101f`) — Session-5 lead wrote it; Session-6 lead has not reviewed it.
+2. Runtime: set stored `expiresAt` to the past (or wait), fire an authenticated call, paste OkHttp logging showing 401 → `/auth/refresh` 200 → original request retried 200.
+3. Concurrency: fire two authenticated calls simultaneously after expiry; confirm exactly ONE refresh request appears in the backend log.
+4. #17c device binding and #17d WebSocket (table in §2).
+5. Whether `ConsumerService` return types were wrapped in `Response<T>` (hardening) or still throw `HttpException` on non-2xx.
 
 ---
 
-### Bug #16 (🔴 NEW): Consumer wallet "Scan QR" / "Send Money" buttons are complete no-ops — no click listeners wired (2 September 2026, second-opinion deep-dive)
+## 5. CLOSED BUGS — one line each (details in git)
 
-**Symptom:** Tapping "Scan QR" or "Send Money" on the consumer wallet home screen does nothing — no navigation, no crash, no logcat output.
-
-**Prior status:** Initially suspected to be an invalid test (backend was dead from Bug #14 during the first observation). Retested conceptually after Bug #14 fix — symptom persists regardless of backend state because the buttons never fire any network call or navigation intent. This is a pure client-side wiring gap.
-
-**Root cause (confirmed by full source review of all three candidate files):**
-
-1. **`HomeFragment.kt`** — binds exactly seven views: `tv_greeting`, `tv_user_name`, `tv_loyalty_points`, `tv_recent_label`, `tv_txn_1`, `tv_txn_2`, `tv_txn_3`. **Zero click listeners. Zero navigation logic. Zero references to any button view.** This Fragment is a read-only dashboard — it displays data but has no interactive entry points.
-
-2. **`TapToPayFragment.kt`** — cleared of suspicion. Only wires a `TabLayout` toggling between NFC-receive and QR-receive sections (`viewModel.loadQr()` — the wallet showing *its own* QR for merchants to scan, which already works). No P2P navigation.
-
-3. **`HomeActivity.kt`** — cleared of suspicion. Only wires `BottomNavigationView` → fragment swap, NFC foreground dispatch for tag taps, WebSocket dialog handling, and FCM tap-through. No FAB, no standalone buttons, no P2P navigation at the Activity level.
-
-4. **`fragment_home.xml`** exists on disk (6557 bytes — large enough to contain button views) but its content could not be extracted due to a persistent terminal `cat` rendering issue (see Environment Notes). The buttons are almost certainly declared here as orphaned views — present in XML, never referenced in Kotlin.
-
-5. **Target Activities all exist and are compiled into the module:** `P2PQrScannerActivity.kt`, `P2PSendActivity.kt`, `P2PPayActivity.kt`, `MerchantHcePayActivity.kt`, `NfcTagPaymentActivity.kt` — all present in `consumer-wallet/src/main/java/com/orchestratepay/consumer/ui/`. The destinations are built; the entry points were never connected.
-
-6. **Supporting evidence from test coverage gap:** `ConsumerP2PPayFlowTest.kt` exists in `androidTest` (the P2P pay flow was tested in isolation), but there is **no `HomeFragmentTest.kt` or `HomeActivityTest.kt`** anywhere in the test tree. Someone wrote and tested the P2P Activities but never wrote (or tested) the tap-through from the home screen.
-
-**Fix (designed, blocked on `fragment_home.xml` + `activity_home.xml` + `AndroidManifest.xml` content extraction):**
-```kotlin
-// HomeFragment.kt, inside onViewCreated — exact view IDs TBD from XML
-binding.btnScanQr.setOnClickListener {
-    startActivity(Intent(requireContext(), P2PQrScannerActivity::class.java))
-}
-binding.btnSendMoney.setOnClickListener {
-    startActivity(Intent(requireContext(), P2PSendActivity::class.java))
-}
-```
-Plus: verify both Activities are declared in `consumer-wallet/src/main/AndroidManifest.xml` (115 lines, 5259 bytes — content not yet extracted). If not declared, wiring the listener will produce `ActivityNotFoundException` at runtime — the manifest fix must ship in the same commit.
-
-**Priority:** This is the highest-ROI fix in the entire backlog. The core P2P feature is *literally unreachable* from the UI. Trivial effort to fix once the XML IDs are confirmed.
+| # | What | Fix commit |
+|---|---|---|
+| — | APDU INS bytes in `NfcReaderManager` (0xC0→0x80, 0xC1→0x81) — **see Bug #20 re: docs mismatch** | `16e333c` |
+| — | HCE payload thread-safety (AtomicReference) | `8ef53d8` |
+| — | HCE token TTL 60s→90s | `1e3c431` |
+| — | targetSdk 35 for nfc-core compat | `186521c` |
+| — | Google Services plugin disabled (FCM off) | `1d332fb` |
+| — | consumer-wallet compile failures + gradle wrapper generated | `fd21ba5` |
+| 1 | `:app` launcher icons missing | `e9866d0` |
+| 2 | HCE service "not in manifest" — **retracted, was a tooling false-negative** | `4d77878` |
+| 3 | colors.xml | `e9866d0` |
+| 4 | kapt→KSP for Room | `e9866d0` |
+| 5 | 5 post-KSP compile clusters (WorkManager dep, ApiClient typo, NdefFormatable import, missing layout, generic inference) | `e9866d0` |
+| 6 | nfc-core `consumer-rules.pro` missing | `6e33592` |
+| 7 | softpos launcher icons + AnimatorSet.repeatCount | `35ec698` |
+| 8 | Debug URL `10.0.2.2` → `localhost` + `adb reverse` | `73b066c` |
+| 9 | No merchant/consumer test accounts | manual DB (Session 4) |
+| 10 | Consumer auth response missing `phone`/`displayName` → NPE on login | `154b0a9` |
+| 12 | Web `npm run dev` used Linux-only `fuser` | `1df609c` |
+| 13 | Orphaned ts-node-dev + premature curl = phantom failures (runbook) | §7 |
+| 14 | `/consumers/me/loyalty` SQL against non-existent columns killed the process; + `asyncHandler` | `b6f4f07`, `27bf4af`, `52197d6` (accidental revert), `23ef6f6` (restore) |
 
 ---
 
-### Bug #11 (UPGRADED to 🔴 CRITICAL): Sentry Android SDK crash is FATAL on `:app` — app cannot start at all (2 September 2026)
+## 6. OBSERVATIONS (not bugs)
 
-**Prior status (16 Aug):** "observed, recoverable, deferred." **That claim is now proven false.** It was never tested on `:app` — the merchant app had never been launched on any device until Session 5. Ground truth from the emulator: three consecutive `FATAL EXCEPTION: main` entries, every launch:
-
-```
-Process: com.orchestratepay
-java.lang.RuntimeException: Unable to get provider io.sentry.android.core.SentryInitProvider
-Caused by: java.lang.IllegalArgumentException: DSN is required. Use empty string or set enabled to false in SentryOptions to disable SDK.
-```
-
-Sentry's `SentryInitProvider` (a ContentProvider) runs BEFORE any Activity. No DSN is configured for debug builds → `IllegalArgumentException` during app init → process dies before the launcher activity ever renders. **The merchant app is a crash-looping black icon.**
-
-**Why consumer-wallet survives:** the build logs show Sentry native libraries (`libsentry-android.so`, `libsentry.so`) are packaged only into `:app` — the wallet app does not bundle Sentry.
-
-**Fix (written, NOT yet applied/verified):** debug-only manifest overlay disabling Sentry auto-init:
-- Create `Tap2Pay/android/app/src/debug/AndroidManifest.xml` containing `<provider android:name="io.sentry.android.core.SentryInitProvider" tools:node="remove" />` inside `<application>`
-- Rebuild `:app:assembleDebug`, reinstall on emulator, launch
-- Release builds unaffected. This is Sentry's documented kill switch.
-- **This blocks the handover's top pending milestone: Merchant Terminal login test.** It would have blocked the real-device test too — the emulator found it for free.
+1. **Web vs Android "disparity" was two different accounts.** Parity comparisons only valid same-account.
+2. **Functional parity proven, visual parity not.** Wallet UI is green; web is dark glass. Product decision (item #43) — after functional milestones.
+3. **`nfcSigningKey: null`** at merchant login until `NFC_SIGNING_SECRET` is set. Required before any tag-payment test.
+4. **Undocumented background jobs** (subscription billing, webhook delivery) run live. Backend README §9 lists them; CLAUDE.md doesn't.
+5. **`Tap2Pay/dashboard/`** — React 18 + Vite 5, zero docs, purpose unknown. Product-owner ruling needed. Also `skills/` at root (mentioned in `39bb40a`, never described).
+6. **`androidTest` is stale** — `LoginActivityTest.kt` references view IDs that no longer exist. Doesn't block `assembleDebug`.
+7. **`npm` blocks install scripts** on this machine; bcrypt native binding works anyway. Never approve `@scarf/scarf`.
+8. **Emulators have no NFC radio.** Emulator = login/UI/API testing only. Two physical phones (or phone + ACR122U reader) for HCE/tag.
+9. **Merchant single-device login** — emulator/phone/web kick each other. By design.
+10. **`IdempotencyKeyGen.kt`** produces 32 lowercase hex → passes Joi. Not a bug.
+11. **`POST /transactions` never returns `PENDING`** — expect `201 STK_SENT` or `502 FAILED`. Tests must accept both.
+12. **P2P / wallet features** (`P2PSendActivity`, `/wallet`, `p2p-transactions` tests) appear in code and tests and in **zero** product docs — exactly the profile that produced Bug #16.
+13. **`softpos/` has no login screen** (android/README §9). It is not a shippable product. Descope from any "production" claim.
+14. **Merchant onboarding prerequisite:** registration needs `ADMIN_SECRET`, login needs `APPROVED`. A fresh environment cannot log a merchant in from Android until both are done server-side.
 
 ---
 
-### Bug #15: Backend test suite — 108 pre-existing failures; all previously documented test counts were fiction (2 September 2026)
+## 7. ENVIRONMENT SETUP — Windows / MINGW64
 
-**Ground truth (first full honest run ever):**
-```
-Test Suites: 7 failed, 1 skipped, 85 passed, 92 of 93 total
-Tests:       108 failed, 4 skipped, 1847 passed, 1959 total
-```
+**Every new terminal:** `pwd`, `which adb`, `java -version`. PATH does not persist reliably.
 
-**Documented claims vs reality:** CLAUDE.md said "71 test suites"; Tap2Pay/README.md claims BOTH "34 suites · 717 assertions" AND "85 suites · 1,836 tests" in different sections. None match. Reality: 93/1959.
+**Redis:** not on PATH. `/c/Users/admin/redis/redis-server.exe --port 6379` (leave running). `redis-cli ping` → PONG. Backend log "Reached the max retries per request limit" = Redis down.
 
-**Proven NOT caused by this session's changes:** A/B test — `git checkout 1df609c -- src/routes/consumers.ts` (pre-Bug-#14-fix file) → `routes-auth-mock.test.ts` failed 55/55; fixed file → same suite failed identically in the full run. Failures are pre-existing.
+**PostgreSQL:** native on `:5432`. **Docker is NOT installed** — the docker-compose docs are unusable here.
 
-**Failure clusters:** `routes-auth-mock` (55), `admin-audit`, `merchant-refresh-token`, `account-lockout`, `consumer-otp`, `coverage-gaps-routes`, `ws-server-full` — mostly app-mounting suites; one concrete assertion drift spotted (`tags.ts` test expects 500, code returns 503). Likely mock-state pollution and code/test drift accumulated over months.
+**netstat:** `/c/Windows/System32/netstat.exe -ano`.
 
-**Open sub-question (deployment blocker):** CI (`.github/workflows/ci.yml`) supposedly runs `npm test` on every push. Either Actions are disabled on the fork, or every push has been failing silently. **Audit before any deployment.**
+**Backend:** `cd Tap2Pay/backend && npm run dev`. **Wait for the literal line `OrchestratePay backend running on port 3000`** — the version banner is not readiness. `EADDRINUSE` = orphan: find PID via netstat, `taskkill //F //PID <pid>`. Ctrl+C does not reliably kill npm children.
 
----
+**Web:** `cd Tap2Pay/web && npm run dev` → `:3001`, proxies `/api/*` → `:3000`.
 
-### Bug #14: `/consumers/me/loyalty` SQL schema drift → one dashboard load killed the ENTIRE backend (2 September 2026) — ✅ FIXED, VERIFIED, one revert incident along the way
+**Android:**
+- `export PATH="$PATH:/c/Users/admin/AppData/Local/Android/Sdk/platform-tools"` if `adb` missing.
+- `adb reverse tcp:3000 tcp:3000` — **per device, every time the daemon restarts.** Check `adb reverse --list` before diagnosing "Failed to connect."
+- Emulator: `emulator-5554`. Real device: `RF8R42CY49R`.
+- Build: `cd Tap2Pay/android && ./gradlew assembleDebug`. Gradle 9.4.1, Java 21.
+- Install: `adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk`.
 
-**Symptom:** First-ever load of the web consumer Loyalty page → backend log `error: Unhandled Promise rejection 42703 undefined column (position 63)` → **whole process exits** (`index.ts:392-394`: `process.on('unhandledRejection') → process.exit(1)`) → every subsequent request (including all logins) gets `ECONNREFUSED` from the Vite proxy.
+**Pasting discipline:** one command per paste. Multi-line blocks scramble.
 
-**Trigger surface:** web consumer Loyalty page AND the consumer-wallet app's post-login data load (observed on emulator: login 200 → WS connect → transactions 200 → 42703 crash).
+**Angle-bracket stripping (replaces the "cat quirk"):** XML pasted into the chat loses every tag. Use `sed 's/</[/g; s/>/]/g' <file>` before pasting, or open in VS Code. See F-2.
 
-**Root cause (fully mapped against live schema):** the route's SQL selected five columns that exist in NO migration, and ordered by a sixth that doesn't exist either:
-- `lp.reward_type` → real column is `programme_type`
-- `lp.stamps_per_visit` → real column is `stamps_for_reward`
-- `lp.redeem_threshold` → does not exist anywhere
-- `lb.lifetime_points`, `lb.lifetime_stamps` → do not exist (real: `lifetime_spent_cents`)
-- `ORDER BY lb.updated_at` → column does not exist on `loyalty_balances`
-
-**Why nothing caught it:** the entire jest suite mocks the DB pool — the SQL had never executed against the real schema until a human loaded the page. Same bug *class* as #10 (code-vs-reality contract drift, invisible to compile and to mocked tests).
-
-**Fix (two layers, commits `b6f4f07` + `27bf4af`/`52197d6`):**
-1. Rewrote the SELECT against the real schema, using aliases to preserve BOTH client contracts (web `LoyaltyPage.tsx` and Android `ConsumerApiClient.kt` both expect `reward_type`/`points_balance`/`stamps_balance`/`redeem_threshold` — aliases keep both working unchanged). `lifetime_points`/`lifetime_stamps` dropped from the response — no data source exists for them; Android field made nullable (`Int? = null`) as defense-in-depth.
-2. Added an `asyncHandler` wrapper in `consumers.ts` so async route rejections reach the Express error middleware and return HTTP 500 instead of becoming fatal `unhandledRejection`. (Class-level fix — currently applied to consumers.ts routes only; consider rolling out to other route modules incrementally.)
-
-**⚠️ Incident during the fix (process lesson, now a standing rule):** the A/B test command `git checkout 1df609c -- src/routes/consumers.ts` STAGES the file in git's index. The restore step was missed in execution, so commit `52197d6` (intended: one-line Kotlin fix) silently swept in the REVERTED, buggy consumers.ts — re-arming the crash. Caught by commit-stat inspection ("2 files changed" when 1 was added). Restored in `23ef6f6`.
-
-**Standing rule: `git status --short` before EVERY commit; read what's staged; sanity-check `N files changed` against intent.**
-
-**Verification evidence (pasted this session):** loyalty → `{"balances":[]}` (empty = correct — consumer2 has no loyalty rows) · `/me` → 200 with masked phone · transactions → `{"transactions":[],...}` · health `ok` after all three. **The endpoint that killed the API now returns cleanly and the process survives.**
-
-**Residual verification pending:** re-login on the wallet app against the restored backend (the emulator test ran while the reverted code was live, so it crashed); web Loyalty page load in Chrome.
+**Git:** `git status --short` before every commit. Push: `git push fork main`. Check `git diff -w --stat` when a file shows modified right after committing (F-3).
 
 ---
 
-### Bug #13: Orphaned backend processes + premature curl = phantom "backend broken" diagnoses (2 September 2026)
+## 8. REPOSITORY STRUCTURE
 
-Two intertwined runbook items:
-1. **Ctrl+C in Git Bash does not reliably kill npm-spawned children on Windows.** An orphaned ts-node-dev kept serving `:3000` invisibly (PID 6716) — later `EADDRINUSE` for the supervised instance looked like a "new" bug but wasn't. Kill by PID: `taskkill //F //PID <pid>` (double slashes in Git Bash). Find via `/c/Windows/System32/netstat.exe -ano | grep :3000`.
-2. **The ts-node-dev version banner is NOT readiness.** A curl fired ~2s after `npm run dev` got "Failed to connect after 2248 ms" because the compile was still in progress — creating a false "backend won't start" narrative while it was actually starting fine. **Wait for the literal line `OrchestratePay backend running on port 3000` before hitting the API.**
-
----
-
-### Bug #12: Web `npm run dev` script contained Linux-only `fuser` — broke on Windows (2 September 2026) — ✅ FIXED, commit `1df609c`, live-verified
-
-**Symptom:** `npm run dev` in `web/` → `The system cannot find the path specified.` — Vite never launched.
-
-**Root cause:** `"dev": "fuser -k 3001/tcp 2>/dev/null; vite --port 3001"` — `fuser` doesn't exist on Windows and npm runs scripts through cmd.exe where `2>/dev/null` resolves to `C:\dev\null`.
-
-**Fix:** `"dev": "vite --port 3001"` (Vite auto-bumps ports anyway). Verified: dev server starts in ~1s.
-
----
-
-### Bug #10 verification (16 Aug fix, API-level proof this session): consumer auth responses now include `phone` + `displayName` — confirmed in live JSON. Contract audit round 1 (item #41): **both auth paths CLEAN** — merchant `AuthResponse` (`token, merchantId, merchantName, expiresAt` non-null; `nfcSigningKey, kraPin` nullable) and consumer `AuthResponse` all match live responses. Merchant login verified at API level for the first time: `merchantId 6fce73f3-8482-43ff-ad67-7dce1db4074a`, `role: MERCHANT`, `approvalStatus: APPROVED`.
-
-### Bugs #1–#9 — carried forward unchanged from prior handovers (APDU protocol, thread safety, TTL, kapt→KSP, colors, icons, emulator-only IP, adb reverse persistence, missing test account). All closed/committed. Cross-reference the 16 Aug handover by description.
-
----
-
-## 🔍 OBSERVATIONS (Not Bugs — Logged for Clarity)
-
-1. **The "jane kamaea" mystery — RESOLVED, not a bug.** Web was logged in as `consumer@example.com` (display_name "jane kamaea" — a real, pre-existing account in the DB) while Android used `consumer2@test.com` ("Test Consumer 2"). Different accounts → different data → the perceived "web vs Android disparity." DB contains exactly 3 consumers (one with null email, jane/consumer@example.com, consumer2). Nothing hardcoded (greps found only test fixtures/placeholders). **Lesson: parity comparisons are only valid same-account.**
-
-2. **Functional parity is now PROVEN; visual parity is not.** Same account → same data across web and wallet app (Test Consumer 2, KSh 0, 0 payments). The Android wallet UI is green and does not match web styling — that is a design-language gap (new backlog **item #43: cross-platform design-language unification** — product decision: accept native theming vs define one brand kit; schedule AFTER functional milestones). Also: the merchant app is a checkout terminal by design — it is SUPPOSED to look nothing like the web merchant analytics dashboard.
-
-3. **`nfcSigningKey: null` in merchant login** — caused by `NFC_SIGNING_SECRET` not set (backend warns at login). NFC tag flows need merchant-scoped HMAC keys; provision before tag-payment testing.
-
-4. **Undocumented background jobs observed live:** "Subscription billing" and "Webhook delivery" jobs run on cron — neither is in CLAUDE.md's jobs list (which documents only reconciliation + GL posting). Docs updated for their existence; full inventory still needed.
-
-5. **Undocumented module `Tap2Pay/dashboard/`** — React 18 + Vite 5 app, mentioned in zero docs. Status unknown (abandoned? internal admin?). **Product-owner ruling required before spending any time on it.**
-
-6. **Item #42: androidTest suite is stale/dead.** `app/src/androidTest/.../LoginActivityTest.kt` references view IDs (`emailEditText`, `passwordEditText`, `loginButton`) that no longer exist in current layouts — shows as red "Unresolved reference" in the IDE. Does NOT affect `assembleDebug` (androidTest sources aren't compiled for APKs). Needs rewrite before instrumented testing is possible.
-
-7. **Tap2Pay/README.md contains multiple verified-stale claims** (Next.js web, NEXT_PUBLIC_API_URL, "no k8s yet", 10.0.2.2 debug URL, SDK 34, three different test counts). Treat as aspirational history, not truth. Trust: code > package.json > this handover > everything else.
-
-8. **`npm` on this machine now blocks dependency install scripts** (`install-scripts` warnings for bcrypt, esbuild, @scarf/scarf). bcrypt's native binding verified WORKING despite the warning (`bcrypt OK: $2b$10$...`). Do NOT approve `@scarf/scarf` (telemetry). Likely a Node/npm update since 16 Aug — part of the unexplained environment drift.
-
-9. **Emulator NFC reality (asked repeatedly):** AVD emulators have NO NFC radio. Two emulators or phone+emulator can NEVER test HCE/tag flows. Emulator value = login/UI/API/parity testing (which it has now delivered: Bug #11 discovery + wallet proof). True NFC tests still require TWO PHYSICAL PHONES. Interim hardware-free option on the table: APDU loopback test harness against the real protocol classes; or a cheap ACR122U USB reader (~KSh 3–5k) as merchant-side radio.
-
-10. **Merchant login enforces single-device** — emulator/real-device/web logins kick each other. Expected behavior, not a bug.
-
-11. **IdempotencyKeyGen.kt verified compliant (this session):** `MessageDigest.getInstance("SHA-256").digest(raw).take(16).joinToString("") { "%02x".format(it) }` → exactly 32 lowercase hex characters, deterministic. Passes Joi `.length(32).hex()`. No fix needed. Non-blocking design note: canonical string uses `:` separator — safe today since both `merchantId` and `tagId` are UUID-shaped (no colons), but theoretically fragile if input shapes change. Log as backlog nit.
-
-12. **Proposed E2E test flow correction (this session):** The originally proposed test expected `PENDING` as the HTTP response from `POST /transactions`. Based on the consumer-pay route pattern in the same codebase (PENDING is a transient DB state written *before* the STK Push; the STK Push fires synchronously in the same request; the response is `201 STK_SENT` on success or `502 FAILED` on STK error), `PENDING` is NOT a terminal HTTP response. With placeholder Daraja creds, expect `502` (STK Push rejected) or `201 STK_SENT` (if creds somehow pass). The test assertion should accept both as valid terminal outcomes. Also: QR token TTL is 90s — scripted tests must run without human pauses between steps.
-
----
-
-## 🖥️ ENVIRONMENT SETUP (Windows/MINGW64 — all rules consolidated)
-
-**Every new terminal, before anything:** `pwd`, `which adb`, `java -version` — MINGW64 does not reliably persist PATH across terminal windows even with `.bashrc` edits (reconfirmed again this session).
-
-**Redis:** NOT on PATH. Manual start every session: `/c/Users/admin/redis/redis-server.exe --port 6379` (leave running). Verify: `redis-cli ping` → PONG. Backend log "Reached the max retries per request limit" = Redis not running.
-
-**PostgreSQL:** Running natively on `:5432` (not Docker).
-
-**Docker is NOT installed on this machine** (`docker: command not found`) — the docker-compose local stack documented in README is unusable here.
-
-**netstat:** Not on PATH in Git Bash. Use `/c/Windows/System32/netstat.exe -ano`.
-
-**Backend:** `cd Tap2Pay/backend && npm run dev` — **wait for the literal line `OrchestratePay backend running on port 3000`** (version banner ≠ readiness). If `EADDRINUSE :::3000`: orphaned process — find PID via netstat, `taskkill //F //PID <pid>`. Ctrl+C may NOT kill npm children — always verify the port is free after stopping.
-
-**Web:** `cd Tap2Pay/web && npm run dev` → Vite on `:3001`, proxies `/api/*` to `:3000`. (Fixed this session; was broken on Windows.)
-
-**Android/adb:**
-- `adb` may need `export PATH="$PATH:/c/Users/admin/AppData/Local/Android/Sdk/platform-tools"` in fresh terminals.
-- **`adb reverse tcp:3000 tcp:3000` is required per device/emulator** — works on BOTH real devices and emulators. Does NOT survive ADB daemon restarts; if "Failed to connect to localhost:3000" reappears, check `adb reverse --list` FIRST.
-- Emulator in use: `emulator-5554` (Pixel AVD created this session via Android Studio Device Manager).
-- Build: `cd Tap2Pay/android && ./gradlew assembleDebug` (all 4 modules, verified BUILD SUCCESSFUL post-Bug-#14-fix). Gradle 9.4.1, Java 21 (OpenJDK 21.0.10), AGP deprecation warnings are noise.
-- Install: `adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk` (paths resolve only from inside `Tap2Pay/android/`).
-
-**Pasting discipline (NEW, important):** multi-line command blocks pasted into this MINGW64 terminal get SCRAMBLED (observed repeatedly — caused two silently-failed doc edits and a mangled heredoc). **Paste one command at a time**, or do file edits in VS Code. Terminal = single-line commands only.
-
-**⚠️ Terminal `cat` rendering issue (NEW, this session):** `cat` on specific XML files in the consumer-wallet layout directory produces **zero output and zero error**, even though `file` confirms the files are plain ASCII/UTF-8 and `wc -l`/`wc -c` report real line/byte counts (e.g., `AndroidManifest.xml`: 115 lines, 5259 bytes; `fragment_home.xml`: 6557 bytes). NOT an encoding issue — `file` rules out UTF-16. NOT a missing-file issue — `ls -la` confirms presence and size. Suspected MinTTY/Git-Bash rendering bug specific to certain file content patterns. **Workaround:** use `grep -n "" <file>` (forces output through grep's code path) or `code <file>` (opens in VS Code, paste from editor tab). Do NOT waste time re-running `cat` — it has failed four consecutive times on the same files across different working directories and invocation styles.
-
-**Git discipline (NEW standing rule):** `git status --short` before EVERY commit; read what's staged; verify `N files changed` matches intent. (Born from the `52197d6` accidental-revert incident.) Push target: `git push fork main` — NOT origin.
-
----
-
-## 🏗️ PROJECT ARCHITECTURE (Current State)
+Regenerate with: `find . -maxdepth 3 -type d -not -path '*/node_modules*' -not -path './.git*' -not -path '*/build*' -not -path '*/.gradle*' | sort`
 
 ```
 OrchestratePay_Platform/
-├── CLAUDE.md                          # ✅ corrected this session (Vite stack, line 29)
-├── docs/                              # 🟡 this handover replaces prior version
-├── infra/                             # k8s/ + nginx/ — untouched; 2 P0 pre-deploy fixes pending
-├── Tap2Pay/
-│   ├── backend/                       # Express + pg + Joi + Redis (ioredis) + ws
-│   │   └── src/routes/
-│   │       ├── consumers.ts           # ✅ Bug #14 fixed (asyncHandler + real-schema SQL)
-│   │       └── auth.ts                # ✅ refresh endpoints confirmed: /auth/refresh + /auth/consumer/refresh (single-use rotation)
-│   ├── web/                           # ✅ Vite 6 + React 19 (Next.js claim CLOSED)
-│   ├── dashboard/                     # ⚠️ UNDOCUMENTED React 18 + Vite 5 app — ruling needed
-│   └── android/
-│       ├── app/                       # 🔴 BLOCKED: fatal Sentry crash on launch (Bug #11)
-│       ├── consumer-wallet/           # ✅ PROVEN on emulator end-to-end; ⚠️ Bug #16 (dead P2P buttons) + Bug #17 (401 on token expiry)
-│       ├── nfc-core/                  # unchanged
-│       └── softpos/                   # builds green, untested at runtime
-└── test-logs/
+├── CLAUDE.md                         AI-assistant orientation. Partially corrected (Vite). Test count + route count stale.
+├── README.md                         Root overview. "Production-ready" table is aspirational. Pin claim correct.
+├── .github/workflows/ci.yml          Claims to run tests on push. Fork status UNKNOWN (Bug #15).
+├── docs/
+│   ├── SESSION_HANDOVER.md           ← this file. Only doc that carries STATUS.
+│   ├── PRODUCTION_READINESS_CHECKLIST.md   ~43 numbered items; compliance + deploy gates. Needs restructure (§10).
+│   ├── ANDROID_NFC_TESTING_PROTOCOL.md     Tests 1–4 for two-phone tap. Pre-flight tables superseded by this doc.
+│   ├── (iOS limitations / QR fallback doc — name per 8f4a279)
+│   ├── (security audit doc — per 07a1d92)
+│   └── archive/  or *_ARCHIVE.md     Old handovers. Delete or move; git has them.
+├── infra/
+│   ├── k8s/                          Manifests. P0 gaps "fixed" in 534c7ba; never applied to a cluster.
+│   └── nginx/
+├── skills/                           Mentioned once (39bb40a). Undocumented.
+├── test-logs/                        Check whether tracked; probably shouldn't be.
+└── Tap2Pay/
+    ├── docker-compose.yml            Unusable on this machine (no Docker).
+    ├── README.md                     Most detailed, most stale. See §10.
+    ├── backend/                      Express + TS + pg + ioredis + ws. Most trustworthy README.
+    │   └── src/{routes(21),middleware,integrations,jobs,realtime,util,db/migrations(001–004),__tests__(93)}
+    ├── web/                          Vite 6 + React 19 + react-router. NOT Next.js.
+    ├── dashboard/                    ⚠️ Undocumented React 18 + Vite 5 app.
+    └── android/
+        ├── build.gradle / settings.gradle / gradle.properties / local.properties (Groovy root)
+        ├── gradlew, gradlew.bat, gradle/        ✅ checked in (android/README says otherwise)
+        ├── common-proguard-rules.pro
+        ├── build_log.txt                        ⚠️ should not be tracked — check `git ls-files`
+        ├── README.md
+        ├── app/                                 Merchant terminal, com.orchestratepay. Sentry 7.6.0. Bug #11.
+        │   └── src/{main,debug(94afe82 overlay?),test,androidTest}
+        ├── consumer-wallet/                     HCE wallet, com.orchestratepay.consumer. Bugs #16, #17.
+        ├── nfc-core/                            Shared library (.kts).
+        └── softpos/                             Builds; no login UI; not a product.
 ```
 
-**Known accounts (verified live this session):**
+---
 
-| Account | Status | Notes |
-|---|---|---|
-| `consumer2@test.com` / `TestPass123` | ✅ login-verified (web + emulator app + curl) | ID `a09df433-e945-40ad-9177-54ec6ac94300`, phone 254700000002, "Test Consumer 2" |
-| `merchant@test.com` / `TestPass123` | ✅ API-verified; ⚠️ app login BLOCKED by Bug #11 | ID `6fce73f3-8482-43ff-ad67-7dce1db4074a`, APPROVED, `nfcSigningKey: null` (NFC_SIGNING_SECRET unset) |
-| `consumer@example.com` (jane kamaea) | exists | The source of the "parity" confusion — different account, different data |
+## 9. ANNOTATED GIT HISTORY — read with `git log --oneline --reverse`
 
-**Migrations:** 001_initial, 002_new_features, 003_settlement_kyc, 004_kyc_aml — all 4 applied (verified via schema_migrations). Loyalty schema ground truth: `loyalty_programmes(programme_type, points_per_ksh, stamps_for_reward, reward_description, active)`, `loyalty_balances(points_balance, stamps_balance, lifetime_spent_cents)`.
+**Era 1 — Upstream (Gabriel, 5 Jun – 20 Jul 2026, `5c96c86` → `fb1dad6`)**
+`851e5c9`/`caad8f7` Next.js 14→15. `8f72155` (26 Jun) **"web app changes to react"** — this is where web became Vite; every doc that says Next.js is from before this commit. `534c7ba` "Fix P0 k8s gaps." `9b4a72e`/`5e65226` "production ready" — code had never been run on a device. `fb1dad6` = `origin/main` tip. **Nothing in this era was hardware-tested.**
+
+**Era 2 — Session 1 (23–24 Jul, `16e333c` → `24b761a`)** Fork begins. APDU INS bytes changed in reader (Bug #20 asks: does the HCE side agree?). Thread-safety, TTL 90s. Security audit doc. 6 docs commits claiming "system verified" — meaning web login worked.
+
+**Era 3 — Session 2 (27–29 Jul, `186521c` → `39bd03c`)** targetSdk 35. Google Services plugin disabled (**FCM dead since here**). Gradle wrapper generated. 150+ compile errors → 4 root causes. First full `assembleDebug` → Bug #1 (icons) real, Bug #2 (HCE manifest) **false** — retracted `4d77878` (8 Aug). Lesson: grep returning nothing ≠ file missing (and, in hindsight, probably the same angle-bracket problem as F-2).
+
+**Era 4 — Session 3 (12 Aug, `e9866d0` → `c6d2b57`)** kapt→KSP, 5 compile clusters, nfc-core proguard, softpos icons. **All 4 modules build green** for the first time. `c6d2b57` claims "2nd NFC phone confirmed available" — **retracted** by `b3c2cc9`.
+
+**Era 5 — Session 4 (16 Aug, `73b066c` → `b3c2cc9`)** `10.0.2.2`→`localhost`. Consumer auth contract NPE fixed (Bug #10). **Consumer wallet works end-to-end on a real phone** — the first real-device proof in the project. `b3c2cc9` corrects the prior handover's false claims.
+
+**Era 6 — Session 5 (2–3 Sep, `1df609c` → `176101f`)** Windows dev script fix. Bug #14 process-kill + accidental revert + restore. Docs: Vite. `94afe82` Bug #11 Sentry overlay committed. `feebff7` handover (incorrectly still says #11 unapplied). `176101f` Bug #17 refresh-token + Authenticator, both apps.
+
+**Pattern to internalise:** every "verified / production ready / confirmed" claim in a commit message before `b3c2cc9` should be read as "compiled." Three retractions (`4d77878`, `b3c2cc9`, this doc's F-1) all came from the same cause.
 
 ---
 
-## 🔧 CURRENT BLOCKERS & NEXT STEPS
+## 10. DOCUMENTATION MAP — trust ratings and what to do with each
 
-### 🔴 Immediate — in this exact order:
+| Doc | Trust | Read when | Action |
+|---|---|---|---|
+| `docs/SESSION_HANDOVER.md` | High (evidence-cited) | First | Keep as the ONLY status document. Update every session. |
+| `Tap2Pay/backend/README.md` | High for how-to; route list (21) is the most complete | Backend work | Keep. Fix test count. |
+| `Tap2Pay/web/README.md` | High | Web work | Keep. |
+| `CLAUDE.md` | Medium | Any AI-assisted session | Fix: "71 suites" → 93; "13 route modules" → 21; add jobs list; add Android debug-URL + adb reverse note; add link to this doc as status source. |
+| `README.md` (root) | Medium | Overview | **Replace the "Key Capabilities" status column** with three columns: Backend impl / Client wired / Verified on hardware. Currently every row says "Production-ready" and none are verified. |
+| `Tap2Pay/android/README.md` | Medium | Android setup | Fix: wrapper IS checked in; add Prerequisites block (backend up, merchant approved, `adb reverse`, `NFC_SIGNING_SECRET`); note Sentry debug overlay; note FCM disabled; add XML-paste workaround. |
+| `docs/ANDROID_NFC_TESTING_PROTOCOL.md` | Medium | Phase 6 | Keep. Replace its pre-flight/account tables with a pointer to this doc. Add F-6 networking prep. Add Bug #20 APDU three-way check as Test 0. |
+| `docs/PRODUCTION_READINESS_CHECKLIST.md` | Low-Medium (not re-read this session) | Before Phase S | **Do not delete** — it holds CBK/KRA/DPA compliance items with month-long lead times. **Restructure** into Phase S / H / P gates (§11) and give every item the three-state columns. Drop items now covered by bug tracking here. |
+| `Tap2Pay/README.md` | **Low** | Payment Flows + Security Model sections only | **Slim it to those two sections plus an index** pointing at backend/web/android READMEs. Delete: Next.js + `NEXT_PUBLIC_API_URL`, both test counts, "no k8s yet", `10.0.2.2`, SDK 34, "placeholder pins", SoftPOS-as-product. Everything it duplicates is more accurate elsewhere. |
+| Archived handovers | None | Never | Move to `docs/archive/` or delete. |
+| iOS limitations, security audit | Medium (static analyses) | Reference | Keep, no action. |
+| `Tap2Pay/android/build_log.txt`, `test-logs/` | — | — | Untrack if tracked. |
 
-1. **Apply the Bug #11 fix** (written, unapplied): create `Tap2Pay/android/app/src/debug/AndroidManifest.xml` with `<provider android:name="io.sentry.android.core.SentryInitProvider" tools:node="remove" />` → `./gradlew :app:assembleDebug` → reinstall on emulator → **launch and login merchant app** (`merchant@test.com` / `TestPass123` / Device ID `emu-01`). This completes the handover's #1 pending milestone at emulator grade. Commit the fix.
-
-2. **Verify backend is running the restored Bug #14 code** (it should have auto-respawned on the `23ef6f6` restore): health → consumer login → `/me/loyalty` → health. Then **re-login the wallet app on the emulator** and confirm the backend survives its post-login loyalty call. Then load the **web consumer Loyalty page** in Chrome — same check.
-
-3. **Apply Bug #16 fix** (consumer wallet dead buttons): extract `fragment_home.xml` + `activity_home.xml` + `AndroidManifest.xml` content via VS Code (`code <file>`) since `cat` is broken for these files → confirm button view IDs → wire `setOnClickListener` in `HomeFragment.kt` → verify manifest declarations for `P2PQrScannerActivity` and `P2PSendActivity` → rebuild → retest on emulator. This is the highest-ROI fix in the backlog — P2P is currently unreachable from the UI.
-
-4. **Apply Bug #17 fix** (token-expiry 401 on both Android apps): confirm exact refresh response shape from `sed -n '195,215p'` and `sed -n '695,715p'` of `auth.ts` → confirm consumer crash-vs-silent-fail from `HomeViewModel.kt` → add `refreshToken` to both `AuthResponse` data classes → persist in both `SessionManager`s → add `OkHttp Authenticator` with synchronized single-flight refresh to both API clients → fix consumer `bearer()` null handling → rebuild both apps → test by waiting for token expiry or manually setting `expiresAt` to the past.
-
-### 🟡 Next (no hardware needed):
-
-5. Bug #15 triage: audit CI (is it running? failing silently on the fork?) — deployment blocker. Then failure-cluster triage.
-6. Item #41 contract audit round 2: extend the live-JSON vs data-class diff beyond auth (transactions, loyalty, merchants/me) — the class is proven to exist (Bugs #10, #14, #17).
-7. Roll `asyncHandler` out to remaining route modules (Bug #14 class-fix).
-
-### ⏳ Blocked on hardware (unchanged critical path):
-
-8. Merchant Terminal on the REAL device (after Bug #11 fix + emulator pass).
-9. 2nd NFC phone — physically confirm via `adb devices` showing two entries, pasted output.
-10. ANDROID_NFC_TESTING_PROTOCOL.md Tests 1–4. (Note: that protocol's pre-flight and account tables are superseded by this document.)
-
-### 🗓️ Parallel, non-engineering:
-
-11. CBK PSP license (3–6 months lead — must already be in motion), KRA eTIMS, Kenya DPA 2019.
-12. Product-owner rulings needed: `dashboard/` module fate; design-language unification (item #43); Daraja sandbox credentials for real STK Push testing. (Refresh-token handling is NO LONGER a product decision — it's a confirmed bug with a designed fix; just needs implementation.)
-
-### Deployment path (agreed direction, not started):
-
-**Phase S (staging):** fix the 2 P0 k8s manifest gaps → VPS deploy via docker-compose → domain + TLS → nginx serves built web → Daraja sandbox creds → Android staging build config + signed APKs.
-**Phase H (hardening):** JWT_SECRET rotation, DB SSL, rate limiting, Sentry upgrades (backend 8.x→10.x AND Android DSN config), backups.
-**Phase P (production):** gated on Safaricom production onboarding + CBK license.
-
-**Bugs #14/#15/#17 and the CI audit gate Phase S.** Bug #17 in particular is a deployment blocker — you cannot ship an app that silently loses auth after 8–24h with no recovery path.
+**Convention change (adopt now):** READMEs describe *how to run and how it is designed*. They never carry status words ("ready", "verified", "done"). Status lives here, with the three-state table. Checklist items are split into backend / client / verified — a merged checkbox is how the refresh-token gap survived for months.
 
 ---
 
-## 📝 SESSION 5 COMMIT LOG (all pushed to `fork`)
+## 11. PLAN — in order; each phase unblocks the next
 
-| Hash | Change |
-|---|---|
-| `1df609c` | fix(web): remove Linux-only fuser from dev script (Bug #12) |
-| `b6f4f07` | fix(backend): Bug #14 — /me/loyalty schema drift + asyncHandler |
-| `27bf4af` | fix(android): lifetimePoints nullable (Bug #14 client side) |
-| `52197d6` | fix(android): `Int? = null` completion — ⚠️ accidentally also reverted consumers.ts |
-| `96f2d0b` | docs(claude): web stack corrected to Vite 6 (closes item #34) |
-| `23ef6f6` | fix(backend): restore Bug #14 fix lost in 52197d6 |
+### Phase 0 — Environment & tree truth (today, ~20 min)
+- [ ] `git diff -w --stat` on `ConsumerApiClient.kt`; resolve F-3 (commit renormalisation or the real change). Tree must be clean before Phase 1.
+- [ ] `git show --stat 94afe82`; `ls Tap2Pay/android/app/src/debug/`; paste. Confirms Bug #11 applied-in-source.
+- [ ] Test the XML workaround: `sed 's/</[/g; s/>/]/g' Tap2Pay/android/app/src/debug/AndroidManifest.xml`. Result decides F-2.
+- [ ] `git ls-files | grep -E 'build_log|test-logs'` — untrack if present.
+- [ ] Backend up (`/readiness` ready — ✅ today), Redis PONG, `adb devices`, `adb reverse --list`.
 
-*Pending commits (fixes designed, not yet applied):*
-- Bug #11: Sentry debug manifest overlay for `:app`
-- Bug #16: HomeFragment click listener wiring + manifest verification
-- Bug #17: Refresh-token persistence + OkHttp Authenticator (both apps)
+### Phase 1 — Merchant app exists (Bug #11 verify)
+- [ ] `./gradlew :app:assembleDebug` → install on `emulator-5554` → launch → paste logcat (no `SentryInitProvider` exception) + screenshot/description of `LoginActivity`.
+- [ ] Login `merchant@test.com` / `TestPass123` / device `emu-01`. Paste backend log line for the login.
+- [ ] Mark Bug #11 Verified in §2.
+
+### Phase 2 — Bug #16 (dead P2P buttons)
+- [ ] Dump `fragment_home.xml`, `activity_home.xml`, `consumer-wallet/.../AndroidManifest.xml` via the F-2 workaround.
+- [ ] Wire `setOnClickListener` → `P2PQrScannerActivity` / `P2PSendActivity` in `HomeFragment.kt`; confirm manifest declarations; rebuild; tap; paste logcat showing the Activity start.
+
+### Phase 2.5 — Contract audit, done once, as a table (no hardware)
+- [ ] `grep -rn '"/api/v1\|@GET\|@POST\|@PUT' Tap2Pay/android/app/src/main Tap2Pay/android/consumer-wallet/src/main` → list every endpoint each app calls.
+- [ ] For each: Kotlin response data class vs the route's actual `res.json(...)`. Nullable/missing fields = Bug #10/#14/#17 class. Record in a table in this doc.
+- [ ] Include Bug #20: `NfcReaderManager` INS bytes vs `ConsumerHceService`/`OrchestaHceService` vs `apduservice.xml` vs README. Three-way agreement or fix.
+- [ ] Include #17c (device binding on refresh) and #17d (WS after refresh) by reading `middleware/auth.ts`, `auth.ts` refresh handler, `ws-server.ts`.
+
+### Phase 3 — Bug #17 runtime verification + full smoke pass
+- [ ] Read `git show 176101f` end-to-end (Session 6 lead has not).
+- [ ] Force expiry, one call → paste 401 → refresh 200 → retry 200. Two concurrent calls → exactly one refresh in backend log.
+- [ ] Smoke checklist, both apps, every screen, every button: table of screen / expected / actual / evidence. Expect more Bug-#16-class finds.
+
+### Phase 4 — Docs (per §10)
+- [ ] Root README three-column status table; CLAUDE.md numbers; android README prerequisites; Tap2Pay/README slimmed; checklist restructured; archives moved.
+
+### Phase 5 — Bug #15 + CI
+- [ ] Confirm whether Actions run on the fork (GitHub → Actions tab, or `gh run list`). If red/absent → deployment gate.
+- [ ] Triage the 7 failing suites by cluster (`routes-auth-mock` 55, `admin-audit`, `merchant-refresh-token`, `account-lockout`, `consumer-otp`, `coverage-gaps-routes`, `ws-server-full`). Fix or quarantine with reasons.
+
+### Phase 6 prerequisites (do BEFORE phones arrive)
+- [ ] Decide networking (F-6): two USB `adb reverse`, or LAN-IP build with cleartext allowlisted in both apps, or ngrok. Build and install the chosen config on one phone and prove a login over it.
+- [ ] Set `NFC_SIGNING_SECRET`; confirm `nfcSigningKey` non-null at merchant login.
+- [ ] Daraja sandbox credentials in `.env` (currently placeholders → every STK Push returns 502).
+- [ ] Merchant app on real device `RF8R42CY49R` login proven.
+
+### Phase 6 — The milestone
+- [ ] `adb devices` showing two physical devices, pasted.
+- [ ] ANDROID_NFC_TESTING_PROTOCOL Tests 1–4. One real tap → one real STK Push → callback → `PAYMENT_CONFIRMED` on the terminal. Logs pasted for each hop.
+
+### Deployment path (unchanged; gated on Phases 3, 5, 6)
+**S (staging):** k8s P0 re-check → VPS docker-compose or k8s → domain + TLS → nginx → Daraja sandbox → `staging` buildType (fix defaultConfig `/v1/` path) → signed APKs.
+**H (hardening):** JWT_SECRET rotation, DB SSL, Sentry DSN for Android + backend Sentry 8→10, security-crypto stable release, backups, re-enable FCM.
+**P (production):** Safaricom go-live, CBK PSP licence (3–6 months — must already be in motion), KRA eTIMS, Kenya DPA 2019.
+
+**Product-owner rulings outstanding:** `dashboard/` fate · design-language unification (#43) · SoftPOS in or out of scope · Daraja sandbox creds owner.
 
 ---
 
-## 📝 DECISION LOG (Session 5)
+## 12. DECISION LOG (Session 6 additions; Session 5 log retained in git at `feebff7`)
 
 | Date | Decision | Rationale |
 |---|---|---|
-| 2026-09-02 | Verify stack claims from package.json, not docs | Closed the months-old Next.js/Vite contradiction (item #34) in minutes |
-| 2026-09-02 | Fixed Bug #14 with schema-aligned SQL + client-contract-preserving aliases, plus asyncHandler class-fix | Never-released endpoint = no compat to preserve; aliases avoid touching both clients; wrapper prevents future single-query process kills |
-| 2026-09-02 | Made Android `lifetimePoints` nullable rather than keeping a field with no data source | Bug #10-class defense-in-depth |
-| 2026-09-02 | Upgraded Bug #11 from "deferred" to CRITICAL after emulator evidence | Prior "recoverable" claim was never tested on `:app`; three fatal crashes observed; blocks the merchant-app milestone entirely |
-| 2026-09-02 | Declared wallet button test INVALID (backend was dead during it) | Evidence-based triage — no UI debugging against a dead API |
-| 2026-09-02 | Logged 108 test failures as pre-existing (Bug #15) after A/B proof; did NOT block current work on it | Honest baseline; rot predates session; CI audit queued as the real deployment gate |
-| 2026-09-02 | New standing rules: `git status --short` before every commit; single-line terminal pastes; wait for the running-line before curling | Each born from a real incident this session |
-| 2026-09-02 | Emulator adopted as the standing 3rd test surface (with web + real phone) | Already earned its keep: found Bug #11 for free, proved wallet parity |
-| 2026-09-02 | Confirmed NFC HCE testing is physically impossible on any emulator combination | Prevents wasted cycles; two real phones remain the only true HCE test |
-| 2026-09-02 | Upgraded refresh-token handling from "backlog observation" to Bug #17 (tracked, immediate priority) | Source review confirmed it's a live user-facing auth failure, not a "nice to have." Both clients silently drop the refresh token the backend already sends. Single-use rotation confirmed — Authenticator design must include single-flight guard. |
-| 2026-09-02 | Diagnosed Bug #16 (dead P2P buttons) by elimination: cleared TapToPayFragment, HomeActivity, and HomeFragment of navigation logic → buttons must be orphaned XML views | Systematic source review of all three candidate files; supported by test coverage gap (P2P Activities tested, home entry point not) |
-| 2026-09-02 | Verified IdempotencyKeyGen.kt compliant with Joi `.length(32).hex()` — no fix needed | SHA-256 → 16 bytes → 32 hex chars. Deterministic. Prevents wasted effort chasing a non-bug. |
-| 2026-09-02 | Corrected E2E test flow: `PENDING` is a transient DB state, not an HTTP response — test should expect `201 STK_SENT` or `502 FAILED` | Prevents a false-negative test assertion that would have blocked the parity verification milestone |
-| 2026-09-02 | Documented terminal `cat` rendering quirk; established `grep -n ""` / VS Code as the reliable file-reading fallback | Four consecutive `cat` failures on confirmed-real ASCII files. Don't fight the terminal — route around it. |
+| 2026-09-03 | Adopted three-state bug status (Committed / Applied / Verified) | Bug #11 was committed and still reported unapplied a day later; a single "status" column cannot represent this |
+| 2026-09-03 | Reclassified the "cat quirk" as chat-side angle-bracket stripping (hypothesis, test defined) | `network_security_config.xml` pasted as text-nodes-only — terminal is fine, tags are lost on paste |
+| 2026-09-03 | Added mandatory onboarding order (§0) and annotated history (§9) | New devs were reading the most-detailed-most-wrong doc first |
+| 2026-09-03 | READMEs carry no status words; status lives only here | Doc drift is the mechanism that hid Bugs #11/#16/#17 |
+| 2026-09-03 | Phase 2.5 contract audit inserted before further button-tapping | Bugs #10/#14/#17 are one disease; find the rest in one read, not one at a time |
+| 2026-09-03 | Physical-device networking prep moved ahead of the tap test | Debug builds are USB-`adb reverse` only; discovering this with two phones in hand wastes the session |
+| 2026-09-03 | "Production-ready" in any existing doc redefined as "compiles" until Phase 6 passes | No feature in the Key Capabilities table has been executed on hardware end-to-end |
 
 ---
-
 END OF SESSION_HANDOVER.md
 ```
 
 ---
 
-**To save and commit** (single-line commands, per the standing rule):
+## Save, verify, commit
+
+One command per paste:
 
 ```bash
 code docs/SESSION_HANDOVER.md
 ```
-Paste the full content above into the VS Code tab, save, then:
+Replace the whole file with the block above, save. Then:
 
 ```bash
-cd ~/Desktop/projects/colab\ project/OrchestratePay_Platform
+git diff -w --stat
+```
+This answers F-3 first — if it prints nothing except the handover, the `ConsumerApiClient.kt` change is line-endings only. Paste the result before committing. Then:
+
+```bash
 git add docs/SESSION_HANDOVER.md
+```
+```bash
 git status --short
 ```
-Verify it shows `M  docs/SESSION_HANDOVER.md` (and ONLY that), then:
+Expect `M docs/SESSION_HANDOVER.md` plus (still unstaged) `M …ConsumerApiClient.kt`. Do **not** add the Kotlin file to this commit.
 
 ```bash
-git commit -m "docs(handover): session 5 update — Bug #16 (dead P2P buttons) + Bug #17 (token-expiry 401) diagnosed, refresh contract mapped, IdempotencyKeyGen verified, E2E test corrected"
+git commit -m "docs(handover): session 6 re-baseline — three-state bug status, onboarding order, annotated history, F-1 (Bug #11 committed in 94afe82 not verified), F-2 (XML tag stripping is chat-side), F-3 (dirty tree post-commit), Phase 0–6 plan"
+```
+```bash
 git push fork main
 ```
 
-After that's pushed, the next steps are exactly the four items in the 🔴 Immediate section — Bug #11 fix first (unblocks merchant app), then Bug #14 re-verification, then Bug #16 (unblocks P2P), then Bug #17 (unblocks sustained sessions). Let me know when you want to tackle each one and I'll provide the exact file replacements.
+## Docs: what to clean up vs. update
+
+Short version of §10, since you asked directly:
+
+- **Don't delete anything that holds compliance or protocol content** — `PRODUCTION_READINESS_CHECKLIST.md`, `ANDROID_NFC_TESTING_PROTOCOL.md`, the iOS and security-audit docs. Restructure the checklist into Phase S/H/P gates with the three-state columns; point the protocol's pre-flight at the handover.
+- **Gut `Tap2Pay/README.md`** down to Payment Flows + Security Model + an index. It's the only doc that is both authoritative-looking and wrong in six places.
+- **Fix numbers in `CLAUDE.md`**, and make root `README.md`'s capabilities table honest (three columns, not one "Production-ready").
+- **Move archived handovers out**; untrack `build_log.txt` / `test-logs/` if tracked.
+- **Rule going forward:** status lives in the handover only. READMEs never say "ready".
+
+## Next implementation step
+
+Phase 0, four commands, paste each result:
+
+```bash
+git diff -w --stat
+```
+```bash
+git show --stat 94afe82
+```
+```bash
+ls -la Tap2Pay/android/app/src/debug/ 2>&1
+```
+```bash
+sed 's/</[/g; s/>/]/g' Tap2Pay/android/app/src/debug/AndroidManifest.xml
+```
+
+The fourth one is the important experiment: if it arrives with square brackets intact, the XML-paste problem is solved, Bug #16 is unblocked, and Phase 1 (rebuild `:app`, launch, paste logcat) starts immediately after.
