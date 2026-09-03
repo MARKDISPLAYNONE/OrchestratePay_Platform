@@ -1,5 +1,6 @@
 package com.orchestratepay.consumer.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -34,6 +35,15 @@ class HomeFragment : Fragment() {
         val tvTxn2        = view.findViewById<TextView>(R.id.tv_txn_2)
         val tvTxn3        = view.findViewById<TextView>(R.id.tv_txn_3)
 
+        // Bug #16 fix: the two Quick Action buttons existed in fragment_home.xml
+        // but were never bound — P2P was unreachable from the UI.
+        view.findViewById<View>(R.id.btn_scan_qr).setOnClickListener {
+            startActivity(Intent(requireContext(), P2PQrScannerActivity::class.java))
+        }
+        view.findViewById<View>(R.id.btn_p2p).setOnClickListener {
+            startActivity(Intent(requireContext(), P2PSendActivity::class.java))
+        }
+
         val name = ConsumerSessionManager.getDisplayName() ?: "there"
         tvGreeting.text = "Welcome back,"
         tvUserName.text = name
@@ -42,7 +52,7 @@ class HomeFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.state.collect { state ->
                     tvPoints.text = "${state.totalPoints} pts"
-                    
+
                     val txns = state.recentTransactions
                     listOf(tvTxn1, tvTxn2, tvTxn3).forEachIndexed { i, tv ->
                         if (i < txns.size) {
@@ -52,12 +62,10 @@ class HomeFragment : Fragment() {
                             tv.visibility = View.GONE
                         }
                     }
-                    
-                    if (txns.isEmpty() && !state.isLoadingTransactions) {
-                        tvRecentLabel.text = "No recent transactions"
-                    } else {
-                        tvRecentLabel.text = "Recent Transactions"
-                    }
+
+                    tvRecentLabel.text =
+                        if (txns.isEmpty() && !state.isLoadingTransactions) "No recent transactions"
+                        else "Recent Transactions"
                 }
             }
         }
@@ -72,6 +80,6 @@ class HomeFragment : Fragment() {
             "DECLINED"  -> "✗"
             else        -> "…"
         }
-        return "$status  KSh $amountKsh — ${txn.merchantName}"
+        return "$status KSh $amountKsh — ${txn.merchantName}"
     }
 }
