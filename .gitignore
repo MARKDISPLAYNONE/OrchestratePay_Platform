@@ -61,3 +61,6 @@ test-logs/
 # Local environment overrides
 .env.local
 .env.*.local
+.next/
+*.tsbuildinfo
+Tap2Pay/android/build_log.txt
