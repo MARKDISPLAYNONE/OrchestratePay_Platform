@@ -52,7 +52,7 @@ req GET /api/v1/consumers/me "" "$CT";                       check "consumers/me
 req GET "/api/v1/consumers/me/transactions?limit=5&offset=0" "" "$CT"; check "consumers/me/transactions" 200
 req GET /api/v1/consumers/me/loyalty "" "$CT";               check "consumers/me/loyalty" 200
 req GET /health;                                             check "health STILL ok after loyalty" 200
-req POST /api/v1/consumers/qr-token "" "$CT";                check "consumers/qr-token" "200|201"
+req POST /api/v1/consumers/qr-token "" "$CT"; check "consumers/qr-token" "200|201"; QRT=$(echo "$BODY" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 req GET /api/v1/consumers/me "" "";                          check "consumers/me WITHOUT token -> 401" 401
 
 echo "=== 5. Merchant login ==="
@@ -73,8 +73,8 @@ req GET /api/v1/merchants/me/analytics/weekly "" "$MT";                  check "
 req GET /api/v1/loyalty/programme "" "$MT";                              check "loyalty/programme" "200|404"
 
 echo "=== 8. Payments (placeholder Daraja creds -> 502 is a PASS) ==="
-req POST /api/v1/transactions "{\"merchantId\":\"$MID\",\"amountCents\":1000,\"source\":\"QR_CODE\",\"idempotencyKey\":\"$(hex32)\",\"timestamp\":$(now),\"currency\":\"KES\"}" "$MT"
-check "POST /transactions (merchant, QR_CODE)" "201|502" "status=$(echo "$BODY"|j status)"
+req POST /api/v1/transactions "{\"merchantId\":\"$MID\",\"amountCents\":1000,\"source\":\"CONSUMER_QR\",\"consumerQrToken\":\"$QRT\",\"idempotencyKey\":\"$(hex32)\",\"timestamp\":$(now),\"currency\":\"KES\"}" "$MT"
+check "POST /transactions (merchant scans consumer QR, CONSUMER_QR)" "201|502" "status=$(echo "$BODY"|j status)"
 K=$(hex32)
 req POST "/api/v1/consumers/pay/$MID" "{\"amountCents\":1000,\"idempotencyKey\":\"$K\",\"timestamp\":$(now),\"currency\":\"KES\"}" "$CT"
 check "POST /consumers/pay/:merchantId" "201|502" "status=$(echo "$BODY"|j status)"
