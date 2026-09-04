@@ -9,7 +9,7 @@
  *   PUT  /api/v1/consumers/me                       — update display_name, sms_opt_in
  *   GET  /api/v1/consumers/me/transactions          — transaction history (across all merchants)
  *   GET  /api/v1/consumers/me/loyalty               — loyalty balances across all merchants
- *   POST /api/v1/consumers/pay/:merchantId          — consumer-initiated QR payment (source=QR_CODE)
+ *   POST /api/v1/consumers/pay/:merchantId          — consumer-initiated payment (QR_CODE, or MERCHANT_HCE when merchantHceToken is present — Bug #30)
  *   GET  /api/v1/consumers/transactions/:txnId/status — poll payment status (used by QR web page)
  */
 
@@ -91,14 +91,16 @@ router.get('/c/:consumerId', requireAuth, asyncHandler(async (req: Request, res:
 
 router.use(requireConsumerAuth)
 
-// ─── Schema for consumer-initiated QR payment ────────────────────────────────
-// Merchant ID comes from the URL; source is always QR_CODE — not in the body.
+// ─── Schema for consumer-initiated payment ───────────────────────────────────
+// Merchant ID comes from the URL. Source is derived server-side (QR_CODE, or
+// MERCHANT_HCE from a valid merchantHceToken) — never taken from the body.
 const consumerPaySchema = Joi.object({
   amountCents: Joi.number().integer().min(100).max(100_000_000).required(), // KSh 1,000,000 max — matches merchant limit
   idempotencyKey: Joi.string().length(32).hex().required(),
   timestamp: Joi.number().integer().min(1_577_836_800_000).max(4_102_444_800_000).required(),
   currency: Joi.string().valid('KES', 'USD', 'EUR', 'GBP', 'TZS', 'UGX', 'RWF').optional().default('KES'),
   merchantHceToken: Joi.string().uuid().optional().allow(null), // Bug #30: present when the wallet read a merchant HCE payment request
+  source: Joi.string().valid('QR_CODE', 'MERCHANT_HCE').optional(), // wallet sends it (ConsumerApiClient.kt L116); server IGNORES it — source is derived from the token in the handler
 })
 
 // ─── POST /api/v1/consumers/qr-token ──────────────────────────────────────────
@@ -245,8 +247,10 @@ router.get('/me/loyalty', asyncHandler(async (req: Request, res: Response) => {
 }))
 
 // ─── POST /api/v1/consumers/pay/:merchantId ──────────────────────────────────
-// Consumer-initiated QR payment. The merchant ID comes from the URL so the
-// consumer cannot spoof it. Source is always QR_CODE — no NFC/terminal logic.
+// Consumer-initiated payment. The merchant ID comes from the URL so the
+// consumer cannot spoof it. Source is QR_CODE unless a valid merchantHceToken
+// binds the payment to a merchant HCE session, in which case it is MERCHANT_HCE
+// (Bug #30). The wallet's MerchantHcePayActivity posts here after an NFC read.
 
 router.post('/pay/:merchantId', validate(consumerPaySchema), asyncHandler(async (req: Request, res: Response) => {
   const { merchantId } = req.params
@@ -284,6 +288,36 @@ router.post('/pay/:merchantId', validate(consumerPaySchema), asyncHandler(async 
     }
     const merchant = merchantResult.rows[0]
 
+    // ─── Bug #30: bind an HCE-read payment to the merchant's armed session ──
+    // Merchant app minted merchant:hce:{token} = {merchantId, merchantName,
+    // consumerId?, amountCents, exp} (transactions.ts merchant-hce-token, 60 s).
+    // The wallet read it over NFC and posts it here. Before this block the token
+    // was stripped, the merchant's amount was never enforced, and the ledger
+    // recorded an HCE payment as QR_CODE. `source` in the body is never trusted.
+    let paymentSource: 'QR_CODE' | 'MERCHANT_HCE' = 'QR_CODE'
+    if (merchantHceToken) {
+      const hceKey = `merchant:hce:${merchantHceToken}`
+      const hceRaw = await redis.get(hceKey)
+      if (!hceRaw) {
+        return res.status(401).json({ error: 'Merchant payment request expired or already used — ask the merchant to re-activate' })
+      }
+      const hceSession = JSON.parse(hceRaw) as { merchantId: string; consumerId?: string; amountCents: number }
+      if (hceSession.merchantId !== merchantId) {
+        logger.warn('MERCHANT_HCE merchantId mismatch', { tokenMerchant: hceSession.merchantId, pathMerchant: merchantId, consumerId })
+        return res.status(403).json({ error: 'Payment request does not belong to this merchant' })
+      }
+      if (hceSession.consumerId && hceSession.consumerId !== consumerId) {
+        logger.warn('MERCHANT_HCE consumerId mismatch', { tokenConsumer: hceSession.consumerId, consumerId })
+        return res.status(403).json({ error: 'Payment request was issued for a different customer' })
+      }
+      if (hceSession.amountCents !== amountCents) {
+        logger.warn('MERCHANT_HCE amount mismatch', { sessionAmount: hceSession.amountCents, bodyAmount: amountCents, consumerId })
+        return res.status(400).json({ error: "Amount does not match the merchant's payment request" })
+      }
+      await redis.del(hceKey) // single-use; consumed only after all checks pass
+      paymentSource = 'MERCHANT_HCE'
+    }
+
     // ─── Resolve consumer phone ─────────────────────────────────────────────
     const consumerResult = await db.query(
       'SELECT id, phone FROM consumers WHERE id = $1 AND active = true',
@@ -320,12 +354,12 @@ router.post('/pay/:merchantId', validate(consumerPaySchema), asyncHandler(async 
       `INSERT INTO transactions
          (id, merchant_id, consumer_id, amount_cents, source, idempotency_key, status,
           original_currency, original_amount_cents, fx_rate)
-       VALUES ($1, $2, $3, $4, 'QR_CODE', $5, 'PENDING', $6, $7, $8)`,
+       VALUES ($1, $2, $3, $4, $9, $5, 'PENDING', $6, $7, $8)`,
       [txnId, merchantId, consumerId, kesAmountCents, idempotencyKey,
-       currency, amountCents, fxRate === 1 ? null : fxRate]
+       currency, amountCents, fxRate === 1 ? null : fxRate, paymentSource]
     )
 
-    logger.info('Consumer QR transaction created', { txnId, merchantId, consumerId, currency, amountCents, kesAmountCents })
+    logger.info('Consumer transaction created', { source: paymentSource, txnId, merchantId, consumerId, currency, amountCents, kesAmountCents })
 
     // ─── Fire STK Push ────────────────────────────────────────────────────────
     const callbackUrl = `${process.env.DARAJA_CALLBACK_BASE_URL}/api/v1/mpesa-callback`
@@ -368,7 +402,7 @@ router.post('/pay/:merchantId', validate(consumerPaySchema), asyncHandler(async 
     await redis.setex(cacheKey, 120, JSON.stringify(pendingResponse))
     await redis.setex(`txn:${txnId}`, 120, JSON.stringify({ txnId, idempotencyKey }))
 
-    logger.info('Consumer QR STK Push sent', { txnId, checkoutRequestId: stkResult.checkoutRequestId })
+    logger.info('Consumer STK Push sent', { source: paymentSource, txnId, checkoutRequestId: stkResult.checkoutRequestId })
     res.status(201).json(pendingResponse)
   } catch (err: unknown) {
     logger.error('Consumer pay failed', { merchantId, consumerId, error: (err as Error).message })

@@ -520,8 +520,11 @@ router.get('/', async (req: Request, res: Response) => {
 // ─── POST /api/v1/transactions/merchant-hce-token ─────────────────────────────
 // Called by the merchant app before activating HCE mode.
 // Returns a 60-second single-use token the merchant's phone will emit via HCE.
-// The consumer wallet reads this token and uses it in POST /transactions with
-// source=MERCHANT_HCE to initiate a payment to the merchant with the pre-set amount.
+// The consumer wallet reads this token and posts it to POST /consumers/pay/:merchantId
+// (consumer JWT, ConsumerApiClient.kt L201). The server derives source=MERCHANT_HCE
+// from the token (Bug #30). The MERCHANT_HCE branch earlier in THIS file (L211–235)
+// is unreachable by the wallet — merchant-auth route, and it reads hceSession.consumerId
+// which f51bca0 made optional (F-24). Do not point the wallet at it.
 
 router.post('/merchant-hce-token', validate(merchantHceTokenSchema), async (req: Request, res: Response) => {
   const merchantId = req.merchant!.sub

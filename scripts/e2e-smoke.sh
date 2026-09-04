@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Fullstack API smoke test against the live local backend.
 # Usage (from repo root, backend running):  bash scripts/e2e-smoke.sh
+# NOTE: logs in as merchant@test.com with deviceId smoke-01. Merchant login is
+# single-device (auth.ts L133 rewrites merchant:device:{id}) — running this while
+# the merchant app is signed in on a device forces one 401 → refresh there (#31).
 set -u
 ROOT="${ROOT:-http://localhost:3000}"
 ADMIN_SECRET="${ADMIN_SECRET:-$(grep -E '^ADMIN_SECRET=' Tap2Pay/backend/.env 2>/dev/null | cut -d= -f2- | tr -d '\r"')}"
@@ -76,6 +79,20 @@ echo "=== 8. Payments (placeholder Daraja creds -> 502 is a PASS) ==="
 req POST /api/v1/transactions "{\"merchantId\":\"$MID\",\"amountCents\":1000,\"source\":\"CONSUMER_QR\",\"consumerQrToken\":\"$QRT\",\"idempotencyKey\":\"$(hex32)\",\"timestamp\":$(now),\"currency\":\"KES\"}" "$MT"
 check "POST /transactions (merchant scans consumer QR, CONSUMER_QR)" "201|502" "status=$(echo "$BODY"|j status)"
 req POST /api/v1/transactions/merchant-hce-token "{\"amountCents\":1000}" "$MT"; check "merchant-hce-token (Present NFC, no consumerId yet)" 200
+# ─── Bug #30: reverse-HCE end to end, no radio needed ───────────────────────
+HCET=$(echo "$BODY" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+req POST "/api/v1/consumers/pay/$MID" "{\"amountCents\":2000,\"idempotencyKey\":\"$(hex32)\",\"timestamp\":$(now),\"currency\":\"KES\",\"merchantHceToken\":\"$HCET\"}" "$CT"
+check "HCE token with wrong amount -> 400 (token NOT consumed)" 400
+req POST "/api/v1/consumers/pay/$MID" "{\"amountCents\":1000,\"idempotencyKey\":\"$(hex32)\",\"timestamp\":$(now),\"currency\":\"KES\",\"merchantHceToken\":\"$HCET\",\"source\":\"MERCHANT_HCE\"}" "$CT"
+check "consumer pays merchant HCE session (MERCHANT_HCE, wallet body shape)" "201|502" "status=$(echo "$BODY"|j status)"
+req POST "/api/v1/consumers/pay/$MID" "{\"amountCents\":1000,\"idempotencyKey\":\"$(hex32)\",\"timestamp\":$(now),\"currency\":\"KES\",\"merchantHceToken\":\"$HCET\"}" "$CT"
+check "replay same merchant HCE token -> 401" 401
+req POST "/api/v1/consumers/pay/$MID" "{\"amountCents\":1000,\"idempotencyKey\":\"$(hex32)\",\"timestamp\":$(now),\"currency\":\"KES\",\"merchantHceToken\":\"00000000-0000-4000-8000-000000000000\"}" "$CT"
+check "bogus merchant HCE token -> 401" 401
+req GET "/api/v1/consumers/me/transactions?limit=1&offset=0" "" "$CT"
+SRC=$(echo "$BODY"|j transactions.0.source); [ "$CODE" = "200" ] && [ "$SRC" != "MERCHANT_HCE" ] && CODE="200-but-source=$SRC"
+check "ledger: latest consumer txn recorded as source=MERCHANT_HCE" 200 "source=$SRC status=$(echo "$BODY"|j transactions.0.status)"
+# ─── end #30 ─────────────────────────────────────────────────────────────────
 K=$(hex32)
 req POST "/api/v1/consumers/pay/$MID" "{\"amountCents\":1000,\"idempotencyKey\":\"$K\",\"timestamp\":$(now),\"currency\":\"KES\"}" "$CT"
 check "POST /consumers/pay/:merchantId" "201|502" "status=$(echo "$BODY"|j status)"
