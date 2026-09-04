@@ -160,9 +160,16 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
 // ─── POST /api/v1/auth/refresh (merchant token rotation) ─────────────────────
 
 router.post('/refresh', async (req: Request, res: Response) => {
-  const { refreshToken } = req.body
+  const { refreshToken, deviceId } = req.body
   if (!refreshToken || typeof refreshToken !== 'string') {
     return res.status(400).json({ error: 'refreshToken is required' })
+  }
+
+  // Bug #32: refresh used to mint the new JWT with merchants.device_id — i.e.
+  // whichever device logged in LAST — so a stale refresh token from device A came
+  // back wearing device B's binding. The caller must now prove which device it is.
+  if (!deviceId || typeof deviceId !== 'string') {
+    return res.status(400).json({ error: 'deviceId is required' })
   }
 
   try {
@@ -188,13 +195,32 @@ router.post('/refresh', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Account not active or approved' })
     }
 
+    // Bug #32: the refresh token is only honoured by the device that currently owns
+    // the session. NULL device_id = merchant logged out (32b: previously minted a
+    // JWT with deviceId '' which middleware L150 waves through forever).
+    if (!device_id || device_id !== deviceId) {
+      await db.query(
+        'UPDATE merchant_refresh_tokens SET revoked_at = NOW() WHERE id = $1',
+        [tokenId]
+      )
+      logger.warn('Merchant refresh rejected — device mismatch', {
+        merchantId: merchant_id,
+        tokenDevice: deviceId,
+        currentDevice: device_id,
+      })
+      return res.status(401).json({ error: 'Session invalidated — another device has logged in' })
+    }
+
     await db.query(
       'UPDATE merchant_refresh_tokens SET revoked_at = NOW() WHERE id = $1',
       [tokenId]
     )
 
-    const newAccessToken  = issueMerchantAccessToken(merchant_id, name, device_id ?? '', approval_status)
+    const newAccessToken  = issueMerchantAccessToken(merchant_id, name, deviceId, approval_status)
     const newRefreshToken = await issueMerchantRefreshToken(merchant_id, req.headers['user-agent'])
+
+    // Re-arm the binding cache for this device (same key/TTL as login, L133).
+    await redis.setex(`merchant:device:${merchant_id}`, DEVICE_CACHE_TTL_S, deviceId)
 
     await writeAuditLog({
       event: 'MERCHANT_REFRESH_TOKEN_ISSUED', entityType: 'merchant', entityId: merchant_id,

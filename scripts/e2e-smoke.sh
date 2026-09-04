@@ -3,7 +3,8 @@
 # Usage (from repo root, backend running):  bash scripts/e2e-smoke.sh
 # NOTE: logs in as merchant@test.com with deviceId smoke-01. Merchant login is
 # single-device (auth.ts L133 rewrites merchant:device:{id}) — running this while
-# the merchant app is signed in on a device forces one 401 → refresh there (#31).
+# the merchant app is signed in on a device forces a 401 there; post-#32 that
+# device's refresh is also rejected (correct behaviour), so it must log in again.
 set -u
 ROOT="${ROOT:-http://localhost:3000}"
 ADMIN_SECRET="${ADMIN_SECRET:-$(grep -E '^ADMIN_SECRET=' Tap2Pay/backend/.env 2>/dev/null | cut -d= -f2- | tr -d '\r"')}"
@@ -64,10 +65,18 @@ check "merchant login" 200
 MT=$(echo "$BODY"|j token); MRT=$(echo "$BODY"|j refreshToken); MID=$(echo "$BODY"|j merchantId)
 echo "      merchantId=$MID approvalStatus=$(echo "$BODY"|j approvalStatus) nfcSigningKey=$(echo "$BODY"|j nfcSigningKey) refreshToken=$([ -n "$MRT" ] && echo yes || echo NO)"
 
-echo "=== 6. Merchant refresh (#17f) ==="
+echo "=== 6. Merchant refresh (#17f, Bug #32 device binding) ==="
 req POST /api/v1/auth/refresh "{\"refreshToken\":\"$MRT\"}"
-check "merchant refresh" 200 "fields: $(echo "$BODY"|node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(Object.keys(JSON.parse(d)).join(','))}catch(e){console.log('')}})")"
+check "merchant refresh WITHOUT deviceId -> 400" 400
+req POST /api/v1/auth/refresh "{\"refreshToken\":\"$MRT\",\"deviceId\":\"smoke-01\"}"
+check "merchant refresh (correct device)" 200 "fields: $(echo "$BODY"|node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(Object.keys(JSON.parse(d)).join(','))}catch(e){console.log('')}})")"
 NT=$(echo "$BODY"|j token); [ -n "$NT" ] && MT=$NT
+MRT2=$(echo "$BODY"|j refreshToken)
+req POST /api/v1/auth/refresh "{\"refreshToken\":\"$MRT2\",\"deviceId\":\"evil-99\"}"
+check "merchant refresh from OTHER device -> 401 (token revoked)" 401
+req POST /api/v1/auth/refresh "{\"refreshToken\":\"$MRT2\",\"deviceId\":\"smoke-01\"}"
+check "same refresh token after mismatch -> 401 (was revoked)" 401
+req GET /api/v1/merchants/me "" "$MT"; check "access token from correct-device refresh still valid" 200
 
 echo "=== 7. Merchant reads ==="
 req GET /api/v1/merchants/me "" "$MT";                                   check "merchants/me" 200
