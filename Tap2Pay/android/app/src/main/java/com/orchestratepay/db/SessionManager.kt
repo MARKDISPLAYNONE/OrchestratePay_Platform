@@ -54,6 +54,14 @@ object SessionManager {
      * login responses without it should not crash the login flow, they just
      * mean this session cannot silently refresh later and will force re-login
      * on expiry instead).
+     *
+     * Bug #32: added `deviceId`. The backend now binds the refresh token to the
+     * deviceId sent at login and rejects /auth/refresh from any other value, so
+     * the stored deviceId MUST be byte-identical to what went in LoginRequest.
+     * Persisting it here — atomically with the token pair, from the same value
+     * the caller just sent — is the only way to guarantee that. Nullable so
+     * other call sites don't break; when null we leave any existing stored
+     * value alone rather than clobbering it.
      */
     fun saveSession(
         token: String,
@@ -62,9 +70,10 @@ object SessionManager {
         expiresAt: Long,
         nfcSigningKey: String? = null,
         kraPin: String? = null,
-        refreshToken: String? = null
+        refreshToken: String? = null,
+        deviceId: String? = null
     ) {
-        prefs?.edit()
+        val editor = prefs?.edit()
             ?.putString(KEY_TOKEN, token)
             ?.putString(KEY_MERCHANT_ID, merchantId)
             ?.putString(KEY_MERCHANT_NAME, merchantName)
@@ -72,7 +81,12 @@ object SessionManager {
             ?.putString(KEY_NFC_SIGNING_KEY, nfcSigningKey)
             ?.putString(KEY_KRA_PIN, kraPin)
             ?.putString(KEY_REFRESH_TOKEN, refreshToken)
-            ?.apply()
+
+        if (deviceId != null) {
+            editor?.putString(KEY_DEVICE_ID, deviceId)
+        }
+
+        editor?.apply()
 
         // Generate a new session ID for audit log correlation
         sessionId = java.util.UUID.randomUUID().toString()
@@ -81,8 +95,8 @@ object SessionManager {
     /**
      * Bug #17 fix: called by TokenAuthenticator after a successful /auth/refresh.
      * Updates ONLY the rotating fields (token, refreshToken, expiresAt) — leaves
-     * merchantId/merchantName/nfcSigningKey/kraPin untouched, since the refresh
-     * endpoint's response doesn't include them (confirmed from auth.ts).
+     * merchantId/merchantName/nfcSigningKey/kraPin/deviceId untouched, since the
+     * refresh endpoint's response doesn't include them (confirmed from auth.ts).
      */
     fun updateTokens(token: String, refreshToken: String, expiresAt: Long) {
         prefs?.edit()
@@ -118,6 +132,12 @@ object SessionManager {
         prefs?.edit()?.putString(KEY_DEVICE_ID, deviceId)?.apply()
     }
 
+    /**
+     * Bug #32: read by TokenAuthenticator to prove device identity on
+     * /auth/refresh. Null means "no session was ever saved on this install
+     * (or clearSession() ran)" — the Authenticator treats that as a hard
+     * force-logout, same as a missing refresh token.
+     */
     fun getDeviceId(): String? = prefs?.getString(KEY_DEVICE_ID, null)
 
     fun isLoggedIn(): Boolean = getToken() != null

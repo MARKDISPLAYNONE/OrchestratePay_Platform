@@ -94,7 +94,9 @@ data class AuthResponse(
 
 /** Bug #17 fix: request body for POST /auth/refresh — confirmed from auth.ts. */
 data class RefreshRequest(
-    @SerializedName("refreshToken") val refreshToken: String
+    @SerializedName("refreshToken") val refreshToken: String,
+    // Bug #32: backend now refuses to rebind a refresh token to another device.
+    @SerializedName("deviceId") val deviceId: String
 )
 
 /**
@@ -238,8 +240,10 @@ sealed class ApiResponse {
 // stack and launches LoginActivity. Not wired to an Activity yet — needs
 // OrchestaPayApp.kt to complete. Flagged, not blocking this fix.
 // ─────────────────────────────────────────────────────────────────────────────
+
 object AuthEventBus {
     var onForceLogout: (() -> Unit)? = null
+
     fun notifyForceLogout() {
         onForceLogout?.invoke()
     }
@@ -289,9 +293,18 @@ class TokenAuthenticator(
                 return null
             }
 
+            // Bug #32: refresh is device-bound. No stored deviceId → cannot prove
+            // identity → treat exactly like a missing refresh token.
+            val storedDeviceId = SessionManager.getDeviceId()
+            if (storedDeviceId == null) {
+                SessionManager.clearSession()
+                AuthEventBus.notifyForceLogout()
+                return null
+            }
+
             val newTokens: RefreshResponse? = try {
                 runBlocking {
-                    val refreshResponse = refreshService.refresh(RefreshRequest(storedRefreshToken))
+                    val refreshResponse = refreshService.refresh(RefreshRequest(storedRefreshToken, storedDeviceId))
                     if (refreshResponse.isSuccessful) refreshResponse.body() else null
                 }
             } catch (e: Exception) {
@@ -339,7 +352,10 @@ class OrchestrateApiClient private constructor(baseUrl: String) {
 
     init {
         val logging = HttpLoggingInterceptor().apply {
-            level = if (com.orchestratepay.BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
+            level = if (com.orchestratepay.BuildConfig.DEBUG)
+                HttpLoggingInterceptor.Level.BODY
+            else
+                HttpLoggingInterceptor.Level.NONE
         }
 
         val auth = Interceptor { chain ->
@@ -406,7 +422,10 @@ class OrchestrateApiClient private constructor(baseUrl: String) {
                         expiresAt = body.expiresAt,
                         nfcSigningKey = body.nfcSigningKey,
                         kraPin = body.kraPin,
-                        refreshToken = body.refreshToken
+                        refreshToken = body.refreshToken,
+                        // Bug #32: persist the exact deviceId we just sent in LoginRequest
+                        // so TokenAuthenticator can echo it back on /auth/refresh.
+                         deviceId = deviceId
                     )
                     ApiResponse.Success(
                         txnId = body.merchantId,
@@ -477,7 +496,7 @@ class OrchestrateApiClient private constructor(baseUrl: String) {
         )
     }
 
-    // ─── Response mapping ───────────────────────────────────────────
+    // ─── Response mapping ─────────────────────────────────────────────
 
     private suspend fun safeCall(
         call: suspend () -> Response<TransactionResponse>
@@ -519,8 +538,7 @@ class OrchestrateApiClient private constructor(baseUrl: String) {
     // ─── Singleton ────────────────────────────────────────────────────
 
     companion object {
-        @Volatile
-        private var instance: OrchestrateApiClient? = null
+        @Volatile private var instance: OrchestrateApiClient? = null
 
         fun init(baseUrl: String) {
             instance = OrchestrateApiClient(baseUrl)
